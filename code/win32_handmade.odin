@@ -43,8 +43,8 @@ main :: proc() {
         if int(messageResult) > 0 {
           WIN32.TranslateMessage(&message)
           WIN32.DispatchMessageW(&message)
-          
         } else {
+          break
         }
       }
 
@@ -72,6 +72,7 @@ wWindowCallback :: proc "stdcall" (windowHandle: WIN32.HWND  , message: WIN32.UI
       WIN32.OutputDebugStringA("WM_DESTROY\n")
 
     case WIN32.WM_CLOSE:
+      WIN32.PostQuitMessage(0)
       WIN32.OutputDebugStringA("WM_CLOSE\n")
 
     case WIN32.WM_ACTIVATEAPP:
