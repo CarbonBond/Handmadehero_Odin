@@ -1,6 +1,6 @@
 package main
 
-import FMT "core:fmt"
+import FMT   "core:fmt"
 import UTF16 "core:unicode/utf16"
 import WIN32 "core:sys/windows"
 
@@ -14,7 +14,7 @@ foreign gdi32 {
 @private
 running      : bool
 bitmapInfo   : WIN32.BITMAPINFO 
-bitmapMemory : rawptr
+bitmapMemory : [^]u8
 bitmapWidth  : i32
 bitmapHeight : i32
 
@@ -157,8 +157,27 @@ wResizeDIBSection :: proc "contextless" (width, height: i32) {
   bitmapInfo.bmiHeader.biCompression    = WIN32.BI_RGB
 
   bytesPerPixel :: 4
-  bitmapSize    := uint(bytesPerPixel * width * height)
-  WIN32.VirtualAlloc(nil, bitmapSize, WIN32.MEM_COMMIT, WIN32.PAGE_READWRITE)
+  bitmapSize    := uint(bytesPerPixel * bitmapWidth * bitmapHeight)
+  bitmapMemory = cast([^]u8)WIN32.VirtualAlloc(nil, bitmapSize, WIN32.MEM_COMMIT, WIN32.PAGE_READWRITE)
+
+  bitmapMemoryArray := bitmapMemory[:]
+
+  pitch    := bitmapWidth * bytesPerPixel
+  row : i32 = 0
+  for y : i32 = 0; y < bitmapHeight; y += 1 {
+    pixel := row
+    for x : i32 = 0; x < bitmapWidth; x += 1 {
+      bitmapMemoryArray[pixel] = u8(x)// Blue
+      pixel += 1
+      bitmapMemoryArray[pixel] = u8(y)// Green
+      pixel += 1
+      bitmapMemoryArray[pixel] = 0x00// Red
+      pixel += 1
+      bitmapMemoryArray[pixel] = 0xFF// Alpha
+      pixel += 1
+    }
+    row += pitch
+  }
 
 }
 
