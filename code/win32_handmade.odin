@@ -142,7 +142,8 @@ wResizeDIBSection :: proc "contextless" (width, height: i32) {
 
   if bitmapHandle != nil {
     WIN32.DeleteObject(cast(WIN32.HGDIOBJ)bitmapHandle)
-  } else {
+  } 
+  if bitmapDeviceContext == nil {
     bitmapDeviceContext = CreateCompatibleDC(nil);
   }
 
@@ -154,6 +155,7 @@ wResizeDIBSection :: proc "contextless" (width, height: i32) {
   bitmapInfo.bmiHeader.biCompression    = WIN32.BI_RGB
 
 
+  //TODO(Carbon): Maybe we can just allocate ourselves.
   bitmapHandle = WIN32.CreateDIBSection(
     bitmapDeviceContext, &bitmapInfo,
     WIN32.DIB_RGB_COLORS,
