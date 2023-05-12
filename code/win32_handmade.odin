@@ -12,11 +12,11 @@ foreign gdi32 {
 
 // TODO(Carbon) Change from global
 @private
-running : bool
-bitmapInfo : WIN32.BITMAPINFO 
+running      : bool
+bitmapInfo   : WIN32.BITMAPINFO 
 bitmapMemory : rawptr
-bitmapHandle : WIN32.HBITMAP
-bitmapDeviceContext : WIN32.HDC
+bitmapWidth  : i32
+bitmapHeight : i32
 
 main :: proc() {
 
@@ -108,7 +108,11 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
       y      :=  paint.rcPaint.top
       height :=  paint.rcPaint.bottom - paint.rcPaint.top
       width  :=  paint.rcPaint.right  - paint.rcPaint.left
-      wUpdateWindow(deviceContext, x, y, width, height)
+
+      clientRect : WIN32.RECT 
+      WIN32.GetClientRect(window, &clientRect)
+
+      wUpdateWindow(deviceContext, &clientRect, x, y, width, height)
       WIN32.EndPaint(window, &paint)
 
     case: //Default
@@ -138,39 +142,39 @@ wMessageBox :: proc(text, caption: string) {
 
 wResizeDIBSection :: proc "contextless" (width, height: i32) {
 
-  //TODO(Carbon) Maybe free after if Create fails
-
-  if bitmapHandle != nil {
-    WIN32.DeleteObject(cast(WIN32.HGDIOBJ)bitmapHandle)
-  } 
-  if bitmapDeviceContext == nil {
-    bitmapDeviceContext = CreateCompatibleDC(nil);
+  if bitmapMemory != nil {
+    WIN32.VirtualFree(bitmapMemory, 0, WIN32.MEM_RELEASE)
   }
 
+  bitmapHeight = height
+  bitmapWidth  = width
+
   bitmapInfo.bmiHeader.biSize = size_of(bitmapInfo.bmiHeader)
-  bitmapInfo.bmiHeader.biWidth          = width
-  bitmapInfo.bmiHeader.biHeight         = height
+  bitmapInfo.bmiHeader.biWidth          = bitmapWidth
+  bitmapInfo.bmiHeader.biHeight         = -bitmapHeight
   bitmapInfo.bmiHeader.biPlanes         = 1
   bitmapInfo.bmiHeader.biBitCount       = 32
   bitmapInfo.bmiHeader.biCompression    = WIN32.BI_RGB
 
-
-  //TODO(Carbon): Maybe we can just allocate ourselves.
-  bitmapHandle = WIN32.CreateDIBSection(
-    bitmapDeviceContext, &bitmapInfo,
-    WIN32.DIB_RGB_COLORS,
-    bitmapMemory,
-    nil, 0 
-  )
+  bytesPerPixel :: 4
+  bitmapSize    := uint(bytesPerPixel * width * height)
+  WIN32.VirtualAlloc(nil, bitmapSize, WIN32.MEM_COMMIT, WIN32.PAGE_READWRITE)
 
 }
 
-wUpdateWindow :: proc "contextless" (deviceContext: WIN32.HDC, x, y, width, height: i32) {
+wUpdateWindow :: proc "contextless" (deviceContext: WIN32.HDC, windowRect: ^WIN32.RECT, x, y, width, height: i32) {
+
+  windowWidth  := windowRect.right  - windowRect.left
+  windowHeight := windowRect.bottom - windowRect.top
 
   WIN32.StretchDIBits(
     deviceContext,
+    /*
     x, y, width, height,
     x, y, width, height,
+    */
+    0, 0, bitmapWidth, bitmapHeight,
+    0, 0, windowWidth, windowHeight,
     bitmapMemory,
     &bitmapInfo,
     WIN32.DIB_RGB_COLORS,
