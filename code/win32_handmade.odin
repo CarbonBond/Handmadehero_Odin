@@ -14,9 +14,10 @@ foreign gdi32 {
 @private
 running      : bool
 bitmapInfo   : WIN32.BITMAPINFO 
-bitmapMemory : [^]u8
+bitmapMemory : [^]u32
 bitmapWidth  : i32
 bitmapHeight : i32
+bytesPerPixel :: 4
 
 main :: proc() {
 
@@ -51,19 +52,37 @@ main :: proc() {
       )
     if window!= nil  {
       
-      message: WIN32.MSG
       running = true 
 
+      xOffset : i32 = 0
+      yOffset : i32 = 0
+
       for running {
-        messageResult := WIN32.GetMessageW(&message, nil, 0, 0)
-        if int(messageResult) > 0 {
+
+        message: WIN32.MSG
+        for WIN32.PeekMessageW(&message, nil, 0, 0, WIN32.PM_REMOVE) {
+
+          if message.message == WIN32.WM_QUIT {
+            running = false;
+          }
+
           WIN32.TranslateMessage(&message)
           WIN32.DispatchMessageW(&message)
-        } else {
-          break
         }
-      }
 
+        wRenderWeirdGradiant(xOffset, yOffset)
+
+        deviceContext := WIN32.GetDC(window)
+        clientRect: WIN32.RECT 
+        WIN32.GetClientRect(window, &clientRect)
+        windowWidth  := clientRect.right - clientRect.left
+        windowHeight := clientRect.bottom - clientRect.top
+        wUpdateWindow(deviceContext, &clientRect, 0, 0, windowWidth, windowHeight)
+        WIN32.ReleaseDC(window, deviceContext)
+
+        xOffset += 1
+        yOffset += 1
+      }
     } else {
       wMessageBox("Create Window Fail!", "Handmade Hero")
     //TODO(Carbon) Uses custom logging if CreateWindow failed
@@ -156,28 +175,11 @@ wResizeDIBSection :: proc "contextless" (width, height: i32) {
   bitmapInfo.bmiHeader.biBitCount       = 32
   bitmapInfo.bmiHeader.biCompression    = WIN32.BI_RGB
 
-  bytesPerPixel :: 4
   bitmapSize    := uint(bytesPerPixel * bitmapWidth * bitmapHeight)
-  bitmapMemory = cast([^]u8)WIN32.VirtualAlloc(nil, bitmapSize, WIN32.MEM_COMMIT, WIN32.PAGE_READWRITE)
+  bitmapMemory = cast([^]u32)WIN32.VirtualAlloc(nil, bitmapSize, WIN32.MEM_COMMIT, WIN32.PAGE_READWRITE)
 
-  bitmapMemoryArray := bitmapMemory[:]
 
-  pitch    := bitmapWidth * bytesPerPixel
-  row : i32 = 0
-  for y : i32 = 0; y < bitmapHeight; y += 1 {
-    pixel := row
-    for x : i32 = 0; x < bitmapWidth; x += 1 {
-      bitmapMemoryArray[pixel] = u8(x)// Blue
-      pixel += 1
-      bitmapMemoryArray[pixel] = u8(y)// Green
-      pixel += 1
-      bitmapMemoryArray[pixel] = 0x00// Red
-      pixel += 1
-      bitmapMemoryArray[pixel] = 0xFF// Alpha
-      pixel += 1
-    }
-    row += pitch
-  }
+  wRenderWeirdGradiant(128, 0)
 
 }
 
@@ -200,4 +202,26 @@ wUpdateWindow :: proc "contextless" (deviceContext: WIN32.HDC, windowRect: ^WIN3
     WIN32.SRCCOPY
   )
 
+}
+
+wRenderWeirdGradiant :: proc "contextless" (xOffset, yOffset: i32) {
+
+  bitmapMemoryArray := bitmapMemory[:]
+  pitch    := bitmapWidth 
+  size := pitch * bitmapHeight
+  row : i32 = 0
+  for y : i32 = 0; y < bitmapHeight; y += 1 {
+    pixel := row
+    for x : i32 = 0; x < bitmapWidth; x += 1 {
+      red   : u8 = u8(x*y)
+      green : u8 = u8(x + xOffset)
+      blue  : u8 = u8(y + yOffset)
+      pad   : u8 = u8(0)
+
+      bitmapMemoryArray[pixel] = (u32(red) << 24) | (u32(red) << 16) |
+                                  (u32(green) << 8) | (u32(blue) << 0)
+      pixel += 1
+    }
+    row += pitch
+  }
 }
