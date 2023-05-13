@@ -12,19 +12,24 @@ foreign gdi32 {
 
 // TODO(Carbon) Change from global
 @private
-running      : bool
-bitmapInfo   : WIN32.BITMAPINFO 
-bitmapMemory : [^]u32
-bitmapWidth  : i32
-bitmapHeight : i32
-bytesPerPixel :: 4
+running  : bool
+buffer   : w_offscreen_buffer
+
+w_offscreen_buffer:: struct {
+  info          : WIN32.BITMAPINFO 
+  memory        : [^]u32
+  width         : i32
+  height        : i32
+  pitch         : i32
+}
+
 
 main :: proc() {
 
   instance := cast(WIN32.HINSTANCE)WIN32.GetModuleHandleA(nil)
 
-  windowClass : WIN32.WNDCLASSW
-  windowClass.style         = WIN32.CS_OWNDC | WIN32.CS_HREDRAW | WIN32.CS_VREDRAW
+  windowClass :               WIN32.WNDCLASSW
+  windowClass.style         = WIN32.CS_HREDRAW | WIN32.CS_VREDRAW
   windowClass.lpfnWndProc   = wWindowCallback
   windowClass.hInstance     = instance
   /*TODO(Carbon) Set Icon
@@ -52,11 +57,10 @@ main :: proc() {
       )
     if window!= nil  {
       
-      running = true 
-
       blueOffset : i32 = 0
       greenOffset : i32 = 0
 
+      running = true 
       for running {
 
         message: WIN32.MSG
@@ -70,14 +74,15 @@ main :: proc() {
           WIN32.DispatchMessageW(&message)
         }
 
-        wRenderWeirdGradiant(greenOffset, blueOffset)
+        wRenderWeirdGradiant(&buffer, greenOffset, blueOffset)
 
         deviceContext := WIN32.GetDC(window)
         clientRect: WIN32.RECT 
         WIN32.GetClientRect(window, &clientRect)
         windowWidth  := clientRect.right - clientRect.left
         windowHeight := clientRect.bottom - clientRect.top
-        wUpdateWindow(deviceContext, &clientRect, 0, 0, windowWidth, windowHeight)
+        wDisplayBufferInWindow(deviceContext, clientRect, &buffer
+                      0, 0, windowWidth, windowHeight)
         WIN32.ReleaseDC(window, deviceContext)
 
         greenOffset += 1
@@ -104,7 +109,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
       WIN32.GetClientRect(window, &clientRect)
       width  := clientRect.right - clientRect.left
       height := clientRect.bottom - clientRect.top
-      wResizeDIBSection(width, height)
+      wResizeDIBSection(&buffer, width, height)
       WIN32.OutputDebugStringA("WM_SIZE\n")
 
     case WIN32.WM_DESTROY:
@@ -131,7 +136,8 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
       clientRect : WIN32.RECT 
       WIN32.GetClientRect(window, &clientRect)
 
-      wUpdateWindow(deviceContext, &clientRect, x, y, width, height)
+      wDisplayBufferInWindow(deviceContext, clientRect, &buffer
+                    x, y, width, height)
       WIN32.EndPaint(window, &paint)
 
     case: //Default
@@ -159,31 +165,39 @@ wMessageBox :: proc(text, caption: string) {
                     WIN32.MB_OK|WIN32.MB_ICONINFORMATION)
 }
 
-wResizeDIBSection :: proc "contextless" (width, height: i32) {
+wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer, 
+                                         width, height: i32) {
 
-  if bitmapMemory != nil {
-    WIN32.VirtualFree(bitmapMemory, 0, WIN32.MEM_RELEASE)
+  if bitmap.memory != nil {
+    WIN32.VirtualFree(bitmap.memory, 0, WIN32.MEM_RELEASE)
   }
 
-  bitmapHeight = height
-  bitmapWidth  = width
+  bitmap.height = height
+  bitmap.width  = width
+  bitmap.pitch   = bitmap.width
 
-  bitmapInfo.bmiHeader.biSize = size_of(bitmapInfo.bmiHeader)
-  bitmapInfo.bmiHeader.biWidth          = bitmapWidth
-  bitmapInfo.bmiHeader.biHeight         = -bitmapHeight
-  bitmapInfo.bmiHeader.biPlanes         = 1
-  bitmapInfo.bmiHeader.biBitCount       = 32
-  bitmapInfo.bmiHeader.biCompression    = WIN32.BI_RGB
+  bitmap.info.bmiHeader.biSize = size_of(bitmap.info.bmiHeader)
+  bitmap.info.bmiHeader.biWidth          = bitmap.width
+  bitmap.info.bmiHeader.biHeight         = -bitmap.height
+  bitmap.info.bmiHeader.biPlanes         = 1
+  bitmap.info.bmiHeader.biBitCount       = 32
+  bitmap.info.bmiHeader.biCompression    = WIN32.BI_RGB
 
-  bitmapSize    := uint(bytesPerPixel * bitmapWidth * bitmapHeight)
-  bitmapMemory = cast([^]u32)WIN32.VirtualAlloc(nil, bitmapSize, WIN32.MEM_COMMIT, WIN32.PAGE_READWRITE)
+  bytesPerPixel  : i32 = 4 
+  bitmapSize     := uint(bytesPerPixel * bitmap.width * bitmap.height)
+  bitmap.memory   = cast([^]u32)WIN32.VirtualAlloc(nil, bitmapSize, 
+                                                   WIN32.MEM_COMMIT,
+                                                   WIN32.PAGE_READWRITE)
 
 
-  wRenderWeirdGradiant(128, 0)
+  wRenderWeirdGradiant(bitmap, 128, 0)
 
 }
 
-wUpdateWindow :: proc "contextless" (deviceContext: WIN32.HDC, windowRect: ^WIN32.RECT, x, y, width, height: i32) {
+wDisplayBufferInWindow :: proc "contextless" (deviceContext: WIN32.HDC, 
+                                     windowRect: WIN32.RECT,
+                                     bitmap: ^w_offscreen_buffer,
+                                     x, y, width, height: i32) {
 
   windowWidth  := windowRect.right  - windowRect.left
   windowHeight := windowRect.bottom - windowRect.top
@@ -194,25 +208,25 @@ wUpdateWindow :: proc "contextless" (deviceContext: WIN32.HDC, windowRect: ^WIN3
     x, y, width, height,
     x, y, width, height,
     */
-    0, 0, bitmapWidth, bitmapHeight,
+    0, 0, bitmap.width, bitmap.height,
     0, 0, windowWidth, windowHeight,
-    bitmapMemory,
-    &bitmapInfo,
+    bitmap.memory,
+    &bitmap.info,
     WIN32.DIB_RGB_COLORS,
     WIN32.SRCCOPY
   )
 
 }
 
-wRenderWeirdGradiant :: proc "contextless" (greenOffset, blueOffset: i32) {
+wRenderWeirdGradiant :: proc "contextless" (bitmap: ^w_offscreen_buffer,
+                                            greenOffset, blueOffset: i32) {
 
-  bitmapMemoryArray := bitmapMemory[:]
-  pitch    := bitmapWidth 
-  size := pitch * bitmapHeight
+  bitmapMemoryArray := bitmap.memory[:]
+  size := bitmap.pitch * bitmap.height
   row : i32 = 0
-  for y : i32 = 0; y < bitmapHeight; y += 1 {
+  for y : i32 = 0; y < bitmap.height; y += 1 {
     pixel := row
-    for x : i32 = 0; x < bitmapWidth; x += 1 {
+    for x : i32 = 0; x < bitmap.width; x += 1 {
       red   : u8 = u8(x*y)
       green : u8 = u8(x + greenOffset)
       blue  : u8 = u8(y + blueOffset)
@@ -222,6 +236,6 @@ wRenderWeirdGradiant :: proc "contextless" (greenOffset, blueOffset: i32) {
                                   (u32(green) << 8) | (u32(blue) << 0)
       pixel += 1
     }
-    row += pitch
+    row += bitmap.pitch
   }
 }
