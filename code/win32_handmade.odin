@@ -77,11 +77,8 @@ main :: proc() {
         wRenderWeirdGradiant(&buffer, greenOffset, blueOffset)
 
         deviceContext := WIN32.GetDC(window)
-        clientRect: WIN32.RECT 
-        WIN32.GetClientRect(window, &clientRect)
-        windowWidth  := clientRect.right - clientRect.left
-        windowHeight := clientRect.bottom - clientRect.top
-        wDisplayBufferInWindow(deviceContext, clientRect, &buffer
+        windowWidth, windowHeight  := wWindowDemensions(window)
+        wDisplayBufferInWindow(deviceContext, window, &buffer
                       0, 0, windowWidth, windowHeight)
         WIN32.ReleaseDC(window, deviceContext)
 
@@ -105,10 +102,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
   result : WIN32.LRESULT = 0
   switch(message) {
     case WIN32.WM_SIZE:
-      clientRect : WIN32.RECT 
-      WIN32.GetClientRect(window, &clientRect)
-      width  := clientRect.right - clientRect.left
-      height := clientRect.bottom - clientRect.top
+      width, height  := wWindowDemensions(window)
       wResizeDIBSection(&buffer, width, height)
       WIN32.OutputDebugStringA("WM_SIZE\n")
 
@@ -133,10 +127,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
       height :=  paint.rcPaint.bottom - paint.rcPaint.top
       width  :=  paint.rcPaint.right  - paint.rcPaint.left
 
-      clientRect : WIN32.RECT 
-      WIN32.GetClientRect(window, &clientRect)
-
-      wDisplayBufferInWindow(deviceContext, clientRect, &buffer
+      wDisplayBufferInWindow(deviceContext, window, &buffer
                     x, y, width, height)
       WIN32.EndPaint(window, &paint)
 
@@ -195,12 +186,11 @@ wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer,
 }
 
 wDisplayBufferInWindow :: proc "contextless" (deviceContext: WIN32.HDC, 
-                                     windowRect: WIN32.RECT,
+                                     window: WIN32.HWND,
                                      bitmap: ^w_offscreen_buffer,
                                      x, y, width, height: i32) {
 
-  windowWidth  := windowRect.right  - windowRect.left
-  windowHeight := windowRect.bottom - windowRect.top
+    windowWidth, windowHeight  := wWindowDemensions(window)
 
   WIN32.StretchDIBits(
     deviceContext,
@@ -238,4 +228,12 @@ wRenderWeirdGradiant :: proc "contextless" (bitmap: ^w_offscreen_buffer,
     }
     row += bitmap.pitch
   }
+}
+
+wWindowDemensions :: proc "contextless" (window : WIN32.HWND) -> (width, height: i32) {
+        clientRect: WIN32.RECT 
+        WIN32.GetClientRect(window, &clientRect)
+        width  = clientRect.right - clientRect.left
+        height = clientRect.bottom - clientRect.top
+        return
 }
