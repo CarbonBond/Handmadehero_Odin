@@ -13,7 +13,7 @@ foreign gdi32 {
 // TODO(Carbon) Change from global
 @private
 running  : bool
-buffer   : w_offscreen_buffer
+globalBuffer   : w_offscreen_buffer
 
 w_offscreen_buffer:: struct {
   info          : WIN32.BITMAPINFO 
@@ -28,8 +28,11 @@ main :: proc() {
 
   instance := cast(WIN32.HINSTANCE)WIN32.GetModuleHandleA(nil)
 
+
+  wResizeDIBSection(&globalBuffer, 1280, 720)
+
   windowClass :               WIN32.WNDCLASSW
-  windowClass.style         = WIN32.CS_HREDRAW | WIN32.CS_VREDRAW
+  windowClass.style         = WIN32.CS_HREDRAW | WIN32.CS_VREDRAW | WIN32.CS_OWNDC
   windowClass.lpfnWndProc   = wWindowCallback
   windowClass.hInstance     = instance
   /*TODO(Carbon) Set Icon
@@ -55,7 +58,10 @@ main :: proc() {
       instance,
       nil,
       )
-    if window!= nil  {
+    if window != nil  {
+      //NOTE(Carbon) As we use CS_OWNDC we don't share the context 
+      //             We can use one DC
+      deviceContext := WIN32.GetDC(window)
       
       blueOffset : i32 = 0
       greenOffset : i32 = 0
@@ -74,12 +80,10 @@ main :: proc() {
           WIN32.DispatchMessageW(&message)
         }
 
-        wRenderWeirdGradiant(&buffer, greenOffset, blueOffset)
+        wRenderWeirdGradiant(&globalBuffer, greenOffset, blueOffset)
 
-        deviceContext := WIN32.GetDC(window)
         windowWidth, windowHeight  := wWindowDemensions(window)
-        wDisplayBufferInWindow(deviceContext, window, &buffer
-                      0, 0, windowWidth, windowHeight)
+        wDisplayBufferInWindow(deviceContext,windowWidth, windowHeight, &globalBuffer)
         WIN32.ReleaseDC(window, deviceContext)
 
         greenOffset += 1
@@ -101,23 +105,16 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
                                   WIN32.LRESULT {
   result : WIN32.LRESULT = 0
   switch(message) {
-    case WIN32.WM_SIZE:
-      width, height  := wWindowDemensions(window)
-      wResizeDIBSection(&buffer, width, height)
-      WIN32.OutputDebugStringA("WM_SIZE\n")
 
     case WIN32.WM_DESTROY:
-      WIN32.OutputDebugStringA("WM_DESTROY\n")
       running = false
       //TODO(Carbon) Handle as an error?
 
     case WIN32.WM_CLOSE:
-      WIN32.OutputDebugStringA("WM_CLOSE\n")
       running = false
       //TODO(Carbon) Possibly message/warn user.
 
     case WIN32.WM_ACTIVATEAPP:
-      WIN32.OutputDebugStringA("WM_ACTIVATEAPP\n")
 
     case WIN32.WM_PAINT:
       paint : WIN32.PAINTSTRUCT
@@ -127,8 +124,8 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
       height :=  paint.rcPaint.bottom - paint.rcPaint.top
       width  :=  paint.rcPaint.right  - paint.rcPaint.left
 
-      wDisplayBufferInWindow(deviceContext, window, &buffer
-                    x, y, width, height)
+      windowWidth, windowHeight := wWindowDemensions(window)  
+      wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
       WIN32.EndPaint(window, &paint)
 
     case: //Default
@@ -186,20 +183,20 @@ wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer,
 }
 
 wDisplayBufferInWindow :: proc "contextless" (deviceContext: WIN32.HDC, 
-                                     window: WIN32.HWND,
-                                     bitmap: ^w_offscreen_buffer,
-                                     x, y, width, height: i32) {
+                                     windowWidth, windowHeight: i32,
+                                     bitmap: ^w_offscreen_buffer) {
 
-    windowWidth, windowHeight  := wWindowDemensions(window)
 
+  //TODO(Carbon) Aspect ration correction.
+  //TODO(Carbon) Play with stretch modes.
   WIN32.StretchDIBits(
     deviceContext,
     /*
     x, y, width, height,
     x, y, width, height,
     */
-    0, 0, bitmap.width, bitmap.height,
     0, 0, windowWidth, windowHeight,
+    0, 0, bitmap.width, bitmap.height,
     bitmap.memory,
     &bitmap.info,
     WIN32.DIB_RGB_COLORS,
