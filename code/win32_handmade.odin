@@ -54,8 +54,8 @@ main :: proc() {
       
       running = true 
 
-      xOffset : i32 = 0
-      yOffset : i32 = 0
+      blueOffset : i32 = 0
+      greenOffset : i32 = 0
 
       for running {
 
@@ -70,7 +70,7 @@ main :: proc() {
           WIN32.DispatchMessageW(&message)
         }
 
-        wRenderWeirdGradiant(xOffset, yOffset)
+        wRenderWeirdGradiant(greenOffset, blueOffset)
 
         deviceContext := WIN32.GetDC(window)
         clientRect: WIN32.RECT 
@@ -80,8 +80,8 @@ main :: proc() {
         wUpdateWindow(deviceContext, &clientRect, 0, 0, windowWidth, windowHeight)
         WIN32.ReleaseDC(window, deviceContext)
 
-        xOffset += 1
-        yOffset += 1
+        greenOffset += 1
+        blueOffset += 1
       }
     } else {
       wMessageBox("Create Window Fail!", "Handmade Hero")
@@ -204,7 +204,7 @@ wUpdateWindow :: proc "contextless" (deviceContext: WIN32.HDC, windowRect: ^WIN3
 
 }
 
-wRenderWeirdGradiant :: proc "contextless" (xOffset, yOffset: i32) {
+wRenderWeirdGradiant :: proc "contextless" (greenOffset, blueOffset: i32) {
 
   bitmapMemoryArray := bitmapMemory[:]
   pitch    := bitmapWidth 
@@ -214,11 +214,11 @@ wRenderWeirdGradiant :: proc "contextless" (xOffset, yOffset: i32) {
     pixel := row
     for x : i32 = 0; x < bitmapWidth; x += 1 {
       red   : u8 = u8(x*y)
-      green : u8 = u8(x + xOffset)
-      blue  : u8 = u8(y + yOffset)
+      green : u8 = u8(x + greenOffset)
+      blue  : u8 = u8(y + blueOffset)
       pad   : u8 = u8(0)
 
-      bitmapMemoryArray[pixel] = (u32(red) << 24) | (u32(red) << 16) |
+      bitmapMemoryArray[pixel] = (u32(pad) << 24) | (u32(red) << 16) |
                                   (u32(green) << 8) | (u32(blue) << 0)
       pixel += 1
     }
