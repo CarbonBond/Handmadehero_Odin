@@ -1,8 +1,9 @@
 package main
 
-import FMT   "core:fmt"
-import UTF16 "core:unicode/utf16"
-import WIN32 "core:sys/windows"
+import FMT    "core:fmt"
+import UTF16  "core:unicode/utf16"
+import WIN32  "core:sys/windows"
+import XINPUT "xinput" 
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
@@ -12,22 +13,20 @@ foreign gdi32 {
 
 // TODO(Carbon) Change from global
 @private
-running  : bool
-globalBuffer   : w_offscreen_buffer
+running            : bool
+globalBuffer       : w_offscreen_buffer
 
-w_offscreen_buffer:: struct {
-  info          : WIN32.BITMAPINFO 
-  memory        : [^]u32
-  width         : i32
-  height        : i32
-  pitch         : i32
+w_offscreen_buffer :: struct {
+        memory        : [^]u32
+        info          : WIN32.BITMAPINFO 
+        width         : i32
+        height        : i32
+        pitch         : i32
 }
-
 
 main :: proc() {
 
   instance := cast(WIN32.HINSTANCE)WIN32.GetModuleHandleA(nil)
-
 
   wResizeDIBSection(&globalBuffer, 1280, 720)
 
@@ -78,6 +77,13 @@ main :: proc() {
 
           WIN32.TranslateMessage(&message)
           WIN32.DispatchMessageW(&message)
+        }
+
+        //TODO(Carbon) Add controller polling here
+        //TODO(Carbon) Whats the best polling frequency? 
+        for {
+          
+          break
         }
 
         wRenderWeirdGradiant(&globalBuffer, greenOffset, blueOffset)
