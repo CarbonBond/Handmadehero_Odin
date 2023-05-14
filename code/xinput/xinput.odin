@@ -1,6 +1,7 @@
 package xinput
 
 import WIN32  "core:sys/windows"
+import H "../helper"
 
 foreign import xinput "system:xinput.lib"
 
@@ -46,13 +47,79 @@ foreign xinput {
 }
 foreign xinput {
   XInputGetState :: proc "stdcall" (
-    dwUserIndex: u32,
+    dwUserIndex: WIN32.DWORD,
     pState:     ^STATE) -> WIN32.DWORD --- 
 }
 foreign xinput {
   XInputSetState :: proc(
   dwUserIndex: WIN32.DWORD,
   pVibration: ^VIBRATION) -> WIN32.DWORD ---
+}
+
+// Multiple DLL loading
+
+Enable : proc(WIN32.BOOL)
+
+GetState : proc(WIN32.DWORD, ^STATE) -> WIN32.DWORD
+
+GetAudioDeviceIds : proc( WIN32.DWORD,  WIN32.LPWSTR, ^WIN32.UINT, 
+                          WIN32.LPWSTR, ^WIN32.UINT) -> WIN32.DWORD
+
+GetBatteryInformation : proc( WIN32.DWORD, WIN32.BYTE,
+                             ^BATTERY_INFORMATION) -> WIN32.DWORD 
+
+GetCapabilities : proc( WIN32.DWORD,WIN32.DWORD, ^CAPABILITIES) -> WIN32.DWORD 
+
+GetDSoundAudioDeviceGuids : proc( WIN32.DWORD, ^WIN32.GUID, 
+                                 ^WIN32.GUID) -> WIN32.DWORD 
+
+GetKeystroke :proc( WIN32.DWORD, WIN32.DWORD, ^KEYSTROKE) -> WIN32.DWORD 
+
+SetState : proc( WIN32.DWORD, ^VIBRATION) -> WIN32.DWORD 
+
+// Failsafe empty functions 
+
+GetStateNothing :: proc(dwUserIndex: WIN32.DWORD, 
+                        pState: ^STATE) -> WIN32.DWORD { return 1 }
+EnableNothing :: proc(enable: WIN32.BOOL) { return } 
+GetAudioDeviceIdsNothing :: proc(
+  dwUserIndex:       WIN32.DWORD,  
+  pRenderDeviceId:   WIN32.LPWSTR,
+  pRenderCount:     ^WIN32.UINT,
+  pCaptureDeviceId:  WIN32.LPWSTR,
+  pCaptureCount:    ^WIN32.UINT) -> WIN32.DWORD { return 1 }
+GetBatteryInformationNothing :: proc(
+  dwUserIndex:          WIN32.DWORD,
+  devtype:              WIN32.BYTE,
+  pBatteryInformation: ^BATTERY_INFORMATION) -> WIN32.DWORD { return 1 } 
+GetCapabilitiesNothing :: proc(
+  dwUserIndex:    WIN32.DWORD,
+  dwFlags:        WIN32.DWORD,
+  pCapabilities: ^CAPABILITIES) -> WIN32.DWORD { return 1 }
+GetDSoundAudioDeviceGuidsNothing :: proc(
+  dwUserIndex:        WIN32.DWORD,
+  pDSoundRenderGuid:  ^WIN32.GUID,
+  pDSoundCaptureGuid: ^WIN32.GUID) -> WIN32.DWORD { return 1 }
+
+GetKeystokeNothing :: proc(
+  dwUserIndex: WIN32.DWORD,
+  dwReserved:  WIN32.DWORD,
+  pKeyStroke: ^KEYSTROKE) -> WIN32.DWORD { return 1 }
+
+SetStateNothing :: proc(
+dwUserIndex: WIN32.DWORD,
+pVibration: ^VIBRATION) -> WIN32.DWORD { return 1 }
+
+@init
+init :: proc() {
+  GetState                  = GetStateNothing
+  Enable                    = EnableNothing
+  GetAudioDeviceIds         = GetAudioDeviceIdsNothing
+  GetBatteryInformation     = GetBatteryInformationNothing
+  GetCapabilities           = GetCapabilitiesNothing
+  GetDSoundAudioDeviceGuids = GetDSoundAudioDeviceGuidsNothing
+  GetKeystroke              = GetKeystokeNothing
+  SetState                  = SetStateNothing
 }
 
 //************************* STRUCTS ***************************//
@@ -101,7 +168,7 @@ CAPABILITIES :: struct {
 
 //************************* constants ***************************//
 
-// Gamepad Button Constants
+// Gamepad Button Constants, wButtons
 GAMEPAD_DPAD_UP        :: 0x0001
 GAMEPAD_DPAD_DOWN      :: 0x0002
 GAMEPAD_DPAD_LEFT      :: 0x0004

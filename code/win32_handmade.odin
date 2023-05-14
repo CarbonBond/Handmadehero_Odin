@@ -4,6 +4,7 @@ import FMT    "core:fmt"
 import UTF16  "core:unicode/utf16"
 import WIN32  "core:sys/windows"
 import XINPUT "xinput" 
+import H      "helper"
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
@@ -81,7 +82,34 @@ main :: proc() {
 
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
-        for {
+        for i : WIN32.DWORD = 0; i < XINPUT.XUSER_MAX_COUNT; i += 1 { 
+
+          controller: XINPUT.STATE
+          err := XINPUT.GetState(i, &controller)
+
+          if err == WIN32.ERROR_SUCCESS {
+            //NOTE (Carbon): Controller Plugged in
+
+            //The pressed buttons:
+             buttonUp        := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_UP)
+             buttonDown      := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_DOWN)
+             buttonLeft      := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_LEFT)
+             buttonRight     := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_RIGHT)
+             buttonStart     := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_START)
+             buttonBack      := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_BACK)
+             buttonThumbL    := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_LEFT_THUMB)
+             buttonThumbR    := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_RIGHT_THUMB)
+             buttonShoulderL := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_LEFT_SHOULDER)
+             buttonShoulderR := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_RIGHT_SHOULDER)
+             buttonA         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_A)
+             buttonB         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_B)
+             buttonX         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_X)
+             buttonY         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_Y)
+
+          } else {
+            //NOTE (Carbon): Controller is not avaliable
+      H.wMessageBox("EMPTY FUNC", "Handmade Hero")
+          }
           
           break
         }
@@ -96,12 +124,12 @@ main :: proc() {
         blueOffset += 1
       }
     } else {
-      wMessageBox("Create Window Fail!", "Handmade Hero")
+      H.wMessageBox("Create Window Fail!", "Handmade Hero")
     //TODO(Carbon) Uses custom logging if CreateWindow failed
     }
 
   } else {
-      wMessageBox("Register Class Fail!", "Handmade Hero")
+      H.wMessageBox("Register Class Fail!", "Handmade Hero")
   //TODO(Carbon) Uses custom logging if RegisterClass failed
   }
 }
@@ -139,24 +167,6 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
   }
 
   return result
-}
-
-wMessageBox :: proc(text, caption: string) {
-  lpText_w : [dynamic]u16
-  append(&lpText_w, 0)
-  for letter in text {
-    append(&lpText_w, 0)
-  }
-  lpCaption_w : [dynamic]u16
-    append(&lpCaption_w, 0)
-  for letter in caption {
-    append(&lpCaption_w, 0)
-  }
-
-  UTF16.encode_string(lpText_w[:], text)
-  UTF16.encode_string(lpCaption_w[:], caption)
-  WIN32.MessageBoxW(nil, &lpText_w[0], &lpCaption_w[0],
-                    WIN32.MB_OK|WIN32.MB_ICONINFORMATION)
 }
 
 wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer, 
