@@ -2,7 +2,7 @@ package xinput
 
 import WIN32  "core:sys/windows"
 import H "../helper"
-
+import DLIB "core:dynlib"
 foreign import xinput "system:xinput.lib"
 
 //************************ FUNCTIONS **************************//
@@ -112,6 +112,20 @@ pVibration: ^VIBRATION) -> WIN32.DWORD { return 1 }
 
 @init
 init :: proc() {
+  lib : DLIB.Library
+  ok  : bool
+  //Load Xinput DLL windows only for now
+  lib, ok = DLIB.load_library("xinput1_4.dll")
+
+  if !ok {
+    lib, ok = DLIB.load_library("xinput1_3.dll")
+  }
+
+  if !ok {
+    lib, ok = DLIB.load_library("xinput9_1_0.dll")
+  }
+
+  //TODO(Carbon): Load nothing functions only if a dll isn't found
   GetState                  = GetStateNothing
   Enable                    = EnableNothing
   GetAudioDeviceIds         = GetAudioDeviceIdsNothing
@@ -120,6 +134,7 @@ init :: proc() {
   GetDSoundAudioDeviceGuids = GetDSoundAudioDeviceGuidsNothing
   GetKeystroke              = GetKeystokeNothing
   SetState                  = SetStateNothing
+
 }
 
 //************************* STRUCTS ***************************//
