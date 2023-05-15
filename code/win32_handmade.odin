@@ -192,8 +192,9 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
     case WIN32.WM_KEYUP:
       
       VKCode  := u32(wParam)
-      wasDown := bool(lParam & ( 1 << 30) != 0)
+      wasDown := bool(lParam & ( 1 << 30))
       isDown  := bool(lParam & ( 1 << 31) == 0)
+      altDown := bool(lParam & ( 1 << 29))
 
       //Stop Key Repeating
       if wasDown != isDown {
@@ -212,6 +213,9 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
           case WIN32.VK_ESCAPE:
             running = false
           case WIN32.VK_SPACE:
+          case WIN32.VK_F4:
+            if altDown do running = false
+
           
         }
       }

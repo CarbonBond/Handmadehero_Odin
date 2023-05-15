@@ -119,12 +119,10 @@ init :: proc() {
 
   if !ok {
     lib, ok = DLIB.load_library("xinput1_3.dll")
-    H.wMessageBox("13", "Handmade Hero")
   }
 
   if !ok {
     lib, ok = DLIB.load_library("xinput9_1_0.dll")
-    H.wMessageBox("910", "Handmade Hero")
   }
 
   if ok {
