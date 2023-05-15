@@ -119,22 +119,54 @@ init :: proc() {
 
   if !ok {
     lib, ok = DLIB.load_library("xinput1_3.dll")
+    H.wMessageBox("13", "Handmade Hero")
   }
 
   if !ok {
     lib, ok = DLIB.load_library("xinput9_1_0.dll")
+    H.wMessageBox("910", "Handmade Hero")
   }
 
-  //TODO(Carbon): Load nothing functions only if a dll isn't found
-  GetState                  = GetStateNothing
-  Enable                    = EnableNothing
-  GetAudioDeviceIds         = GetAudioDeviceIdsNothing
-  GetBatteryInformation     = GetBatteryInformationNothing
-  GetCapabilities           = GetCapabilitiesNothing
-  GetDSoundAudioDeviceGuids = GetDSoundAudioDeviceGuidsNothing
-  GetKeystroke              = GetKeystokeNothing
-  SetState                  = SetStateNothing
+  if ok {
+    tmp := DLIB.symbol_address( lib, "XInputEnable")
+    Enable := cast(proc(WIN32.BOOL))tmp
 
+    tmp = DLIB.symbol_address( lib, "XInputGetAudioDeviceIds")
+    GetAudioDeviceIds := cast(proc( WIN32.DWORD,  WIN32.LPWSTR, ^WIN32.UINT, 
+                          WIN32.LPWSTR, ^WIN32.UINT) -> WIN32.DWORD)tmp
+
+    tmp = DLIB.symbol_address( lib, "XInputGetBatteryInformation")
+    GetBatteryInformation := cast(proc( WIN32.DWORD, WIN32.BYTE,
+                             ^BATTERY_INFORMATION) -> WIN32.DWORD )tmp
+
+    tmp = DLIB.symbol_address( lib, "XInputGetCapabilities")
+    GetCapabilities := cast(proc( WIN32.DWORD,WIN32.DWORD, 
+                                  ^CAPABILITIES) -> WIN32.DWORD )tmp
+
+    tmp = DLIB.symbol_address( lib, "XInputGetDSoundAudioDeviceGuids")
+    GetDSoundAudioDeviceGuids := cast(proc( WIN32.DWORD, ^WIN32.GUID, 
+                                 ^WIN32.GUID) -> WIN32.DWORD )tmp
+
+    tmp = DLIB.symbol_address( lib, "XInputGetKeystroke")
+    GetKeystroke := cast(proc( WIN32.DWORD, WIN32.DWORD, 
+                                ^KEYSTROKE) -> WIN32.DWORD )tmp
+
+    tmp = DLIB.symbol_address( lib, "XInputGetState")
+    GetState = cast( proc(WIN32.DWORD, ^STATE) -> WIN32.DWORD)tmp
+
+    tmp = DLIB.symbol_address( lib, "XInputSetState")
+    SetState = cast(proc( WIN32.DWORD, ^VIBRATION) -> WIN32.DWORD)tmp
+
+  } else {
+    GetState                  = GetStateNothing
+    Enable                    = EnableNothing
+    GetAudioDeviceIds         = GetAudioDeviceIdsNothing
+    GetBatteryInformation     = GetBatteryInformationNothing
+    GetCapabilities           = GetCapabilitiesNothing
+    GetDSoundAudioDeviceGuids = GetDSoundAudioDeviceGuidsNothing
+    GetKeystroke              = GetKeystokeNothing
+    SetState                  = SetStateNothing
+  }
 }
 
 //************************* STRUCTS ***************************//

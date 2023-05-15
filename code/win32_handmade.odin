@@ -108,7 +108,6 @@ main :: proc() {
 
           } else {
             //NOTE (Carbon): Controller is not avaliable
-      H.wMessageBox("EMPTY FUNC", "Handmade Hero")
           }
           
           break
