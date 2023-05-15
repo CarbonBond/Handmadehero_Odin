@@ -172,13 +172,13 @@ init :: proc() {
 //************************* STRUCTS ***************************//
 
 GAMEPAD :: struct {
-  wButtons:      WIN32.DWORD
+  wButtons:      WIN32.WORD
   bLeftTrigger:  WIN32.BYTE
   bRightTrigger: WIN32.BYTE
-  sThumbLX:      WIN32.BYTE
-  sThumbLY:      WIN32.BYTE
-  sThumbRX:      WIN32.BYTE
-  sThumbRY:      WIN32.BYTE
+  sThumbLX:      WIN32.SHORT
+  sThumbLY:      WIN32.SHORT
+  sThumbRX:      WIN32.SHORT
+  sThumbRY:      WIN32.SHORT
 }
 
 STATE :: struct {
@@ -292,8 +292,8 @@ CAPS_PMD_SUPPORTED           :: 0x08
 CAPS_NO_NAVIGATION           :: 0x10
 
 // Limit Constants
-GAMEPAD_LEFT_THUMB_DEADZONE  :: 7849
-GAMEPAD_RIGHT_THUMB_DEADZONE :: 8689
+GAMEPAD_LEFT_THUMB_DEADZONE  : WIN32.SHORT : 7849
+GAMEPAD_RIGHT_THUMB_DEADZONE : WIN32.SHORT : 8689
 GAMEPAD_TRIGGER_THRESHOLD    :: 30
 
 // Index Constants

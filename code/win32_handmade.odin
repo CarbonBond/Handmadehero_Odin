@@ -120,8 +120,16 @@ main :: proc() {
             vibration : XINPUT.VIBRATION 
 
             if buttonB do vibration.wRightMotorSpeed = 60000
-            if buttonX do vibration.wLeftMotorSpeed  = 60000
+            if buttonX do vibration.wLeftMotorSpeed = 60000
 
+            if controller.gamepad.sThumbLX > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
+              controller.gamepad.sThumbLX < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
+              greenOffset += i32(controller.gamepad.sThumbLX >> 12 )
+            }
+            if controller.gamepad.sThumbLY > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
+              controller.gamepad.sThumbLY < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
+              blueOffset -= i32(controller.gamepad.sThumbLY >> 12)
+            }
 
             XINPUT.SetState(0, &vibration)
 
@@ -184,8 +192,8 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
     case WIN32.WM_KEYUP:
       
       VKCode  := u32(wParam)
-      wasDown := bool(lParam & ( 1 << 30))
-      isDown  := bool(lParam & ( 1 << 31))
+      wasDown := bool(lParam & ( 1 << 30) != 0)
+      isDown  := bool(lParam & ( 1 << 31) == 0)
 
       //Stop Key Repeating
       if wasDown != isDown {
@@ -202,6 +210,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
           case WIN32.VK_DOWN:
           case WIN32.VK_RIGHT:
           case WIN32.VK_ESCAPE:
+            running = false
           case WIN32.VK_SPACE:
           
         }
