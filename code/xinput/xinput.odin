@@ -80,35 +80,35 @@ SetState : proc( WIN32.DWORD, ^VIBRATION) -> WIN32.DWORD
 // Failsafe empty functions 
 
 GetStateNothing :: proc(dwUserIndex: WIN32.DWORD, 
-                        pState: ^STATE) -> WIN32.DWORD { return 1 }
+                        pState: ^STATE) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED }
 EnableNothing :: proc(enable: WIN32.BOOL) { return } 
 GetAudioDeviceIdsNothing :: proc(
   dwUserIndex:       WIN32.DWORD,  
   pRenderDeviceId:   WIN32.LPWSTR,
   pRenderCount:     ^WIN32.UINT,
   pCaptureDeviceId:  WIN32.LPWSTR,
-  pCaptureCount:    ^WIN32.UINT) -> WIN32.DWORD { return 1 }
+  pCaptureCount:    ^WIN32.UINT) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED }
 GetBatteryInformationNothing :: proc(
   dwUserIndex:          WIN32.DWORD,
   devtype:              WIN32.BYTE,
-  pBatteryInformation: ^BATTERY_INFORMATION) -> WIN32.DWORD { return 1 } 
+  pBatteryInformation: ^BATTERY_INFORMATION) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED } 
 GetCapabilitiesNothing :: proc(
   dwUserIndex:    WIN32.DWORD,
   dwFlags:        WIN32.DWORD,
-  pCapabilities: ^CAPABILITIES) -> WIN32.DWORD { return 1 }
+  pCapabilities: ^CAPABILITIES) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED }
 GetDSoundAudioDeviceGuidsNothing :: proc(
   dwUserIndex:        WIN32.DWORD,
   pDSoundRenderGuid:  ^WIN32.GUID,
-  pDSoundCaptureGuid: ^WIN32.GUID) -> WIN32.DWORD { return 1 }
+  pDSoundCaptureGuid: ^WIN32.GUID) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED }
 
 GetKeystokeNothing :: proc(
   dwUserIndex: WIN32.DWORD,
   dwReserved:  WIN32.DWORD,
-  pKeyStroke: ^KEYSTROKE) -> WIN32.DWORD { return 1 }
+  pKeyStroke: ^KEYSTROKE) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED }
 
 SetStateNothing :: proc(
 dwUserIndex: WIN32.DWORD,
-pVibration: ^VIBRATION) -> WIN32.DWORD { return 1 }
+pVibration: ^VIBRATION) -> WIN32.DWORD { return DEVICE_NOT_CONNECTED }
 
 @init
 init :: proc() {
@@ -325,4 +325,6 @@ KEYSTROKE_KEYDOWN :: 0x1
 KEYSTROKE_KEYUP   :: 0x2
 KEYSTROKE_REPEAT  :: 0x4
 
+// Windows error 0x48F 
+DEVICE_NOT_CONNECTED :: 0x48F
 
