@@ -17,6 +17,7 @@ foreign gdi32 {
 running            : bool
 globalBuffer       : w_offscreen_buffer
 
+
 w_offscreen_buffer :: struct {
         memory        : [^]u32
         info          : WIN32.BITMAPINFO 
@@ -63,8 +64,9 @@ main :: proc() {
       //             We can use one DC
       deviceContext := WIN32.GetDC(window)
       
-      blueOffset : i32 = 0
+      blueOffset  : i32 = 0
       greenOffset : i32 = 0
+      redOffset   : i32 = 0
 
       running = true 
       for running {
@@ -80,6 +82,7 @@ main :: proc() {
           WIN32.DispatchMessageW(&message)
         }
 
+
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
         for i : WIN32.DWORD = 0; i < XINPUT.XUSER_MAX_COUNT; i += 1 { 
@@ -91,20 +94,36 @@ main :: proc() {
             //NOTE (Carbon): Controller Plugged in
 
             //The pressed buttons:
-             buttonUp        := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_UP)
-             buttonDown      := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_DOWN)
-             buttonLeft      := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_LEFT)
-             buttonRight     := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_DPAD_RIGHT)
-             buttonStart     := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_START)
-             buttonBack      := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_BACK)
-             buttonThumbL    := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_LEFT_THUMB)
-             buttonThumbR    := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_RIGHT_THUMB)
-             buttonShoulderL := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_LEFT_SHOULDER)
-             buttonShoulderR := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_RIGHT_SHOULDER)
-             buttonA         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_A)
-             buttonB         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_B)
-             buttonX         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_X)
-             buttonY         := bool(controller.gamepad.wButtons * XINPUT.GAMEPAD_Y)
+            buttonUp        := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_UP)
+            buttonDown      := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_DOWN)
+            buttonLeft      := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_LEFT)
+            buttonRight     := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_RIGHT)
+            buttonStart     := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_START)
+            buttonBack      := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_BACK)
+            buttonThumbL    := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_LEFT_THUMB)
+            buttonThumbR    := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_RIGHT_THUMB)
+            buttonShoulderL := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_LEFT_SHOULDER)
+            buttonShoulderR := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_RIGHT_SHOULDER)
+            buttonA         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_A)
+            buttonB         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_B)
+            buttonX         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_X)
+            buttonY         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_Y)
+
+            if buttonUp    do blueOffset  += 1
+            if buttonDown  do blueOffset  -= 1
+            if buttonLeft  do greenOffset += 1
+            if buttonRight do greenOffset -= 1
+
+            if buttonA     do redOffset   += 1
+            if buttonY     do redOffset   -= 1
+
+            vibration : XINPUT.VIBRATION 
+
+            if buttonB do vibration.wRightMotorSpeed = 60000
+            if buttonX do vibration.wLeftMotorSpeed  = 60000
+
+
+            XINPUT.SetState(0, &vibration)
 
           } else {
             //NOTE (Carbon): Controller is not avaliable
@@ -113,14 +132,12 @@ main :: proc() {
           break
         }
 
-        wRenderWeirdGradiant(&globalBuffer, greenOffset, blueOffset)
+        wRenderWeirdGradiant(&globalBuffer, greenOffset, blueOffset, redOffset)
 
         windowWidth, windowHeight  := wWindowDemensions(window)
-        wDisplayBufferInWindow(deviceContext,windowWidth, windowHeight, &globalBuffer)
+        wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
         WIN32.ReleaseDC(window, deviceContext)
 
-        greenOffset += 1
-        blueOffset += 1
       }
     } else {
       H.wMessageBox("Create Window Fail!", "Handmade Hero")
@@ -161,6 +178,35 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
       wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
       WIN32.EndPaint(window, &paint)
 
+    case WIN32.WM_SYSKEYDOWN: fallthrough
+    case WIN32.WM_SYSKEYUP: fallthrough
+    case WIN32.WM_KEYDOWN: fallthrough
+    case WIN32.WM_KEYUP:
+      
+      VKCode  := u32(wParam)
+      wasDown := bool(lParam & ( 1 << 30))
+      isDown  := bool(lParam & ( 1 << 31))
+
+      //Stop Key Repeating
+      if wasDown != isDown {
+        switch VKCode {
+          case 'W': 
+          case 'A': 
+          case 'S': 
+          case 'D': 
+          case 'Q': 
+          case 'E': 
+
+          case WIN32.VK_UP:
+          case WIN32.VK_LEFT:
+          case WIN32.VK_DOWN:
+          case WIN32.VK_RIGHT:
+          case WIN32.VK_ESCAPE:
+          case WIN32.VK_SPACE:
+          
+        }
+      }
+      
     case: //Default
       result = WIN32.DefWindowProcW(window, message, wParam, lParam)
   }
@@ -193,7 +239,7 @@ wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer,
                                                    WIN32.PAGE_READWRITE)
 
 
-  wRenderWeirdGradiant(bitmap, 128, 0)
+  wRenderWeirdGradiant(bitmap, 0, 0, 0)
 
 }
 
@@ -221,7 +267,7 @@ wDisplayBufferInWindow :: proc "contextless" (deviceContext: WIN32.HDC,
 }
 
 wRenderWeirdGradiant :: proc "contextless" (bitmap: ^w_offscreen_buffer,
-                                            greenOffset, blueOffset: i32) {
+                                            greenOffset, blueOffset, redOffset: i32) {
 
   bitmapMemoryArray := bitmap.memory[:]
   size := bitmap.pitch * bitmap.height
@@ -229,7 +275,7 @@ wRenderWeirdGradiant :: proc "contextless" (bitmap: ^w_offscreen_buffer,
   for y : i32 = 0; y < bitmap.height; y += 1 {
     pixel := row
     for x : i32 = 0; x < bitmap.width; x += 1 {
-      red   : u8 = u8(x*y)
+      red   : u8 = u8(redOffset)
       green : u8 = u8(x + greenOffset)
       blue  : u8 = u8(y + blueOffset)
       pad   : u8 = u8(0)

@@ -201,8 +201,8 @@ BATTERY_INFORMATION :: struct {
 }
 
 VIBRATION :: struct {
-  wLeftMotorSpeed: WIN32.DWORD
-  wRightMotorSpeed: WIN32.DWORD
+  wLeftMotorSpeed: WIN32.WORD
+  wRightMotorSpeed: WIN32.WORD
 }
 
 CAPABILITIES :: struct {
