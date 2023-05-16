@@ -46,7 +46,7 @@ IMMDeviceEnumerator :: struct {
 
 // This contains the methods for IMMDeviceEnumerator and IUnknown
 vtable_IMMDeviceEnumerator :: struct {
-  using iunknown_vtalbe:   dxgi.IUknown_VTable
+  using iunknown_vtalbe:   dxgi.IUnknown_VTable,
 
   // Generates a collection of audio endpoint devices that meet the 
   // specified criteria
@@ -55,7 +55,7 @@ vtable_IMMDeviceEnumerator :: struct {
     dataFlow:       EDataFlow, // Flow Direction (See EDataFlow in ENUM)
     dwStateMask:    WIN32.DWORD, // Selector (See Device State Constants)
     ppDevices:    ^^IMMDeviceCollection // Where endpoints get stored
-  ) -> WIN32.HRESULT
+  ) -> WIN32.HRESULT,
 
   //Stores the default Endpoint for the flow direction and role. 
   // DATA -> ENDPOINT would return some listening device.
@@ -64,24 +64,24 @@ vtable_IMMDeviceEnumerator :: struct {
     dataFlow:       EDataFlow, // Flow Direction (See EDataFlow in ENUM)
     role:           ERole,      // Role of device (See ERole in ENUM)
     ppEndpoint:   ^^IMMDevice  // Where the endpoint gets stored
-  ) -> WIN32.HRESULT
+  ) -> WIN32.HRESULT,
 
   //Store Endpoint selected by an ID String.
   GetDevice: proc "std" (
     this:        ^IMMDeviceEnumerator,
     pwstrId,      WIN32.LPCWSTR, // points to a string containing EndpoinT ID
     ppDevice:   ^^IMMDevice      // Where the endpoint gets stored
-  ) -> WIN32.HRESULT
+  ) -> WIN32.HRESULT,
 
   // Creates notification callback interface
   RegisterEndpointNotificationCallback proc "std" ( 
     pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT 
+  ) -> WIN32.HRESULT ,
 
   // Deletes notification callback interface
   UnregisterEndpointNotificationCallback proc "std" (
     pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT 
+  ) -> WIN32.HRESULT, 
 
 }
 
@@ -93,35 +93,72 @@ IMMNotificationClient :: struct {
 }
 
 vtable_IMMNotificationClient  :: struct {
-  using iunknown_vtable:   dxgi.IUknown_VTable
+  using iunknown_vtable:   dxgi.IUnknown_VTable,
 
   // Notifies client that default Endpoint device for a device role has changed.
   OnDefaultDeviceChanged: proc "std" (
     dataFlow:       EDataFlow, // Flow Direction (See EDataFlow in ENUM)
     role:           ERole,      // Role of device (See ERole in ENUM)
     ppEndpoint:   ^^IMMDevice  // Where the endpoint gets stored
-  ) -> WIN32.HRESULT
+  ) -> WIN32.HRESULT,
 
   //Store Endpoint selected by an ID String.
   GetDevice: proc "std" (
     this:        ^IMMDeviceEnumerator,
     pwstrId,      WIN32.LPCWSTR, // points to a string containing EndpoinT ID
     ppDevice:   ^^IMMDevice      // Where the endpoint gets stored
-  ) -> WIN32.HRESULT
+  ) -> WIN32.HRESULT,
 
   // Creates notification callback interface
   RegisterEndpointNotificationCallback proc "std" ( 
     pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT 
+  ) -> WIN32.HRESULT,
 
   // Deletes notification callback interface
   UnregisterEndpointNotificationCallback proc "std" (
     pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT 
+  ) -> WIN32.HRESULT,
 
 }
 
-//TODO(Carbon) IMMDevice Class
+
+IMMDevice  :: struct {
+  #subtype iunknown: DXGI.IUnknown
+  using vtable: ^vtable_IMMDevice 
+  //VTable 
+}
+
+vtable_IMMDevice   :: struct {
+  using iunknown_vtable:   dxgi.IUnknown_VTable
+
+  // Creates a COM object with the specified interface
+  Activate: proc "std" (
+    iid:                 WIN32.REFIID, // reference to a GUID
+    dwClsCts:            WIN32.DWORD,  // Context restriction (CLSCTX enum)
+    pActivationParams:  ^PROPVARIANT,  // for type of interface (IAudio = NULL)
+    ppInterface:       ^^rawptr //TODO(Carbon) is a double rawptr the best?
+  ) -> WIN32.HRESULT,
+
+  // Retrieves an endpoint ID string that identifites the Enpoint device
+  GetId: proc "std" (
+    ppstrId: ^WIN32.LPWSTR, // ptr to ptr var which this writes the str into.
+  ) -> WIN32.HRESULT,
+
+  // Retrieves the current device state.
+  GetState: proc "std" (
+    pdwState: ^WIN32.DWORD // Sets variable to the current state (See DEVICE STATE constants)
+  ) -> WIN32.HRESULT,
+
+  // retrieves an interface to the device's property store.
+  OpenPropertyStore: proc "std" (
+    stgmAccess: WIN32.DWORD // Storage Access mode for read, write, or r/w mode.
+    ppProperties: ^^IPropertyStore // Writes address of IPropertStore interface.
+  ) -> WIN32.HRESULT,
+
+}
+
+//TODO(Carbon) IMMDeviceCollection 
+//TODO(Carbon) IPropertyStore
 
 
 IMMNotificationClient :: struct {
@@ -195,6 +232,40 @@ ERole : enum i32 {
 *  IMMDeviceEnumerator:   GetDefaultAudioEndpoint 
 *  IMMNotificationClient: OnDefaultDeviceChanged
 */
+
+/* CLSCTX Reference (in WIN32 library)
+CLSCTX_INPROC_SERVER = 0x1,
+CLSCTX_INPROC_HANDLER = 0x2,
+CLSCTX_LOCAL_SERVER = 0x4,
+CLSCTX_INPROC_SERVER16 = 0x8,
+CLSCTX_REMOTE_SERVER = 0x10,
+CLSCTX_INPROC_HANDLER16 = 0x20,
+CLSCTX_RESERVED1 = 0x40,
+CLSCTX_RESERVED2 = 0x80,
+CLSCTX_RESERVED3 = 0x100,
+CLSCTX_RESERVED4 = 0x200,
+CLSCTX_NO_CODE_DOWNLOAD = 0x400,
+CLSCTX_RESERVED5 = 0x800,
+CLSCTX_NO_CUSTOM_MARSHAL = 0x1000,
+CLSCTX_ENABLE_CODE_DOWNLOAD = 0x2000,
+CLSCTX_NO_FAILURE_LOG = 0x4000,
+CLSCTX_DISABLE_AAA = 0x8000,
+CLSCTX_ENABLE_AAA = 0x10000,
+CLSCTX_FROM_DEFAULT_CONTEXT = 0x20000,
+CLSCTX_ACTIVATE_X86_SERVER = 0x40000,
+CLSCTX_ACTIVATE_32_BIT_SERVER,
+CLSCTX_ACTIVATE_64_BIT_SERVER = 0x80000,
+CLSCTX_ENABLE_CLOAKING = 0x100000,
+CLSCTX_APPCONTAINER = 0x400000,
+CLSCTX_ACTIVATE_AAA_AS_IU = 0x800000,
+CLSCTX_RESERVED6 = 0x1000000,
+CLSCTX_ACTIVATE_ARM32_SERVER = 0x2000000,
+CLSCTX_ALLOW_LOWER_TRUST_REGISTRATION,
+CLSCTX_PS_DLL = 0x80000000
+*/ 
+
+CLSCTX_STD :: WIN32.CLSCTX_INPROC_SERVER | WIN32.CLSCTX_INPROC_HANDLER | 
+              WIN32.CLSCTX_LOCAL_SERVER  | WIN32.CLSCTX_REMOTE_SERVER
 
 // ************* CONSTANTS *******************
 
