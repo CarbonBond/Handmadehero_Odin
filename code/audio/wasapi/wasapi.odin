@@ -44,7 +44,6 @@ IMMDeviceEnumerator :: struct {
   //VTable 
 }
 
-// This contains the methods for IMMDeviceEnumerator and IUnknown
 vtable_IMMDeviceEnumerator :: struct {
   using iunknown_vtalbe:   dxgi.IUnknown_VTable,
 
@@ -124,12 +123,12 @@ vtable_IMMNotificationClient  :: struct {
 
 IMMDevice  :: struct {
   #subtype iunknown: DXGI.IUnknown
-  using vtable: ^vtable_IMMDevice 
+  using vtable: ^vtable_IMMDevice
   //VTable 
 }
 
 vtable_IMMDevice   :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable
+  using iunknown_vtable:   dxgi.IUnknown_VTable,
 
   // Creates a COM object with the specified interface
   Activate: proc "std" (
@@ -157,7 +156,27 @@ vtable_IMMDevice   :: struct {
 
 }
 
-//TODO(Carbon) IMMDeviceCollection 
+IMMDeviceCollection :: struct {
+  #subtype iunknown: DXGI.IUnknown
+  using vtable: ^vtable_IMMDevice 
+  //VTable 
+}
+
+vtable_IMMDeviceCollection :: struct {
+  using iunknown_vtable:   dxgi.IUnknown_VTable,
+
+  //Retrieveces a count of the devices in the device collection
+  GetCount : proc "std" (
+    pcDevices: ^WIN32.UINT // writes number of devices in the device collection
+  ) -> WIN32.HRESULT   
+
+  //Retrieves a pointer to a specivied item in device collection.
+  Item : proc "std" (
+    nDevice: WIN32.UINT // Device Number
+    ppDevice: ^^IMMDevice // writes the IMMDevice interface 
+  ) -> WIN32.HRESULT  
+}
+
 //TODO(Carbon) IPropertyStore
 
 
