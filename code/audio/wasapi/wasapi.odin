@@ -12,7 +12,7 @@ init :: proc() {
   //Load Xinput DLL windows only for now
   lib, ok = DLIB.load_library("Winmm.dll")
   if ok {
-    tmp, found := DLIB.symbol_address(lib, "waveOutOpen")
+    tmp, found := DLIB.symbol_address(lib, "")
     if found {
       H.MessageBox("lib loaded", "Handmade")
     }
@@ -280,19 +280,71 @@ IAudioClient :: struct {
 vtable_IAudioClient :: struct {
   using iunknown_vtable:   dxgi.IUnknown_VTable,
 
-  Initialize: proc "std" () -> WIN32.HRESULT
-  GetBufferSize: proc "std" () -> WIN32.HRESULT
-  GetStreamLatency: proc "std" () -> WIN32.HRESULT
-  GetCurrentPadding: proc "std" () -> WIN32.HRESULT
-  IsFormatSupported: proc "std" () -> WIN32.HRESULT
-  GetMixFormat: proc "std" () -> WIN32.HRESULT
-  GetDevicePeriod: proc "std" () -> WIN32.HRESULT
-  Start: proc "std" () -> WIN32.HRESULT
-  Stop: proc "std" () -> WIN32.HRESULT
-  Reset: proc "std" () -> WIN32.HRESULT
-  SetEventHandle: proc "std" () -> WIN32.HRESULT
-  GetService: proc "std" () -> WIN32.HRESULT
+  //Initializes audio stream
+  Initialize: proc "std" (
+    this:             ^IAudioClient,
+    SharMode:          AUDCLNT_SHAREMODE, //Share with other devices (ENUM)
+    StreamFlags:       WIN32.DWORD,      // Controls creation of stream. 
+    hnsBufferDuration: REFERENCE_TIME,   // buffer cap as time value. 100nano
+    hnsPeriodicity:    REFERENCE_TIME,   // Device period. != 0 in exclusive
+    pFormat:           ^WAVEFORMATEX,    // format descriptor see WAVEFORMATEX
+    AudioSessionGuid:  WIN32.LPCGUID     // Audio Session GUID
+  ) -> WIN32.HRESULT
+
+  //Retrieves the max capacity of the endpoint buffer
+  GetBufferSize: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // retrieves the max latency for current steam
+  GetStreamLatency: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // retrieves the number of frames of padding in endpoint buffer
+  GetCurrentPadding: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // indicated whether endpoint device supports a stream format
+  IsFormatSupported: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // retrieves stream format that audio engine uses for internal processing.
+  GetMixFormat: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // Retrieves the length of the periodic interval for processing pases
+  GetDevicePeriod: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // Start the audio stream
+  Start: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // Stop the audio stream
+  Stop: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // resets audio stream
+  Reset: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
   
+  // Sets event handle that the system signals when buffer is ready.
+  SetEventHandle: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
+
+  // accesses additional services from audio client
+  GetService: proc "std" (
+    this: ^IAudioClient,
+  ) -> WIN32.HRESULT
 
 }
 
@@ -305,6 +357,16 @@ PROPERTYKEY : struct {
 }
 
 PROPVARIANT ::  distinct rawptr //TODO(Carbon) Should I fully implement this?
+
+WAVEFORMATEX {
+  wFormatTag:      WIN32.WORD
+  nChannels:       WIN32.WORD
+  nSamplesPerSec:  WIN32.DWORD
+  nAvgBytesPerSec: WIN32.DWORD
+  nBlockAlign:     WIN32.WORD
+  wBitsPerSample:  WIN32.WORD
+  cbSize:          WIN32.WORD
+}
 
 // ************* ENUMS *******************
 
@@ -329,6 +391,14 @@ ERole : enum i32 {
 /* The following methods use EDataFlow:
 *  IMMDeviceEnumerator:   GetDefaultAudioEndpoint 
 *  IMMNotificationClient: OnDefaultDeviceChanged
+*/
+
+AUDCLNT_SHAREMODE : enum i32 {
+  AUDCLNT_SHAREMODE_SHARED,
+  AUDCLNT_SHAREMODE_EXCLUSIVE
+}
+/* The following methods use AUDCLNT_SHAREMODE:
+*  IAudioClient:  Initialize IsFormatSupported 
 */
 
 /* CLSCTX Reference (in WIN32 library)
@@ -380,6 +450,17 @@ DEVICE_STATEMASK_ALL    :: 0x0F // ALL devices
 *  IMMNotificationClient: OnDeviceStateChanged
 */
 
+AUDCLNT_STREAMFLAGS_CROSSPROCESS        :: 0x00010000
+AUDCLNT_STREAMFLAGS_LOOPBACK            :: 0x00020000
+AUDCLNT_STREAMFLAGS_EVENTCALLBACK       :: 0x00040000
+AUDCLNT_STREAMFLAGS_NOPERSIST           :: 0x00080000
+AUDCLNT_STREAMFLAGS_RATEADJUST          :: 0x00100000
+AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM      :: 0x80000000
+AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY :: 0x08000000
+
+AUDCLNT_SESSIONFLAGS_EXPIREWHENUNOWNED       :: 0x10000000
+AUDCLNT_SESSIONFLAGS_DISPLAY_HIDE            :: 0x20000000
+AUDCLNT_SESSIONFLAGS_DISPLAY_HIDEWHENEXPIRED :: 0x40000000 
 
 
 // Below was supplied by fendevel as I don't know enough about UUID stuff 
