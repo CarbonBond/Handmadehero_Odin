@@ -1,10 +1,11 @@
 package main
 
-import FMT    "core:fmt"
-import UTF16  "core:unicode/utf16"
-import WIN32  "core:sys/windows"
-import XINPUT "xinput" 
-import H      "helper"
+import FMT     "core:fmt"
+import UTF16   "core:unicode/utf16"
+import WIN32   "core:sys/windows"
+import XINPUT  "xinput" 
+import WAVEOUT "audio/wasapi"
+import H       "helper"
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
@@ -82,7 +83,6 @@ main :: proc() {
           WIN32.DispatchMessageW(&message)
         }
 
-
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
         for i : WIN32.DWORD = 0; i < XINPUT.XUSER_MAX_COUNT; i += 1 { 
@@ -148,12 +148,12 @@ main :: proc() {
 
       }
     } else {
-      H.wMessageBox("Create Window Fail!", "Handmade Hero")
+      H.MessageBox("Create Window Fail!", "Handmade Hero")
     //TODO(Carbon) Uses custom logging if CreateWindow failed
     }
 
   } else {
-      H.wMessageBox("Register Class Fail!", "Handmade Hero")
+      H.MessageBox("Register Class Fail!", "Handmade Hero")
   //TODO(Carbon) Uses custom logging if RegisterClass failed
   }
 }
@@ -215,7 +215,6 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
           case WIN32.VK_SPACE:
           case WIN32.VK_F4:
             if altDown do running = false
-
           
         }
       }
@@ -308,3 +307,4 @@ wWindowDemensions :: proc "contextless" (window : WIN32.HWND) -> (width, height:
         height = clientRect.bottom - clientRect.top
         return
 }
+

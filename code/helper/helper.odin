@@ -3,7 +3,7 @@ package helper
 import UTF16  "core:unicode/utf16"
 import WIN32  "core:sys/windows"
 
-wMessageBox :: proc(text, caption: string) {
+MessageBox :: proc(text, caption: string) {
   lpText_w : [dynamic]u16
   append(&lpText_w, 0)
   for letter in text {

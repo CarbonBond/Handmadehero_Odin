@@ -3,58 +3,7 @@ package xinput
 import WIN32  "core:sys/windows"
 import H "../helper"
 import DLIB "core:dynlib"
-foreign import xinput "system:xinput.lib"
 
-//************************ FUNCTIONS **************************//
-foreign xinput {
-  XInputEnable :: proc(enable: WIN32.BOOL) ---
-  /* Remarks
-    Pasing False will stop any vibration effects.
-    Pasing True will 
-  */
-}
-foreign xinput {
-  XInputGetAudioDeviceIds :: proc(
-    dwUserIndex:       WIN32.DWORD,  
-    pRenderDeviceId:   WIN32.LPWSTR,
-    pRenderCount:     ^WIN32.UINT,
-    pCaptureDeviceId:  WIN32.LPWSTR,
-    pCaptureCount:    ^WIN32.UINT) -> WIN32.DWORD ---
-}
-foreign xinput {
-  XInputGetBatteryInformation :: proc(
-    dwUserIndex:          WIN32.DWORD,
-    devtype:              WIN32.BYTE,
-    pBatteryInformation: ^BATTERY_INFORMATION) -> WIN32.DWORD  ---
-}
-foreign xinput {
-  XInputGetCapabilities :: proc(
-    dwUserIndex:    WIN32.DWORD,
-    dwFlags:        WIN32.DWORD,
-    pCapabilities: ^CAPABILITIES) -> WIN32.DWORD ---
-}
-foreign xinput {
-  XInputGetDSoundAudioDeviceGuids :: proc(
-    dwUserIndex:        WIN32.DWORD,
-    pDSoundRenderGuid:  ^WIN32.GUID,
-    pDSoundCaptureGuid: ^WIN32.GUID) -> WIN32.DWORD ---
-}
-foreign xinput {
-  XInputGetKeystoke :: proc(
-    dwUserIndex: WIN32.DWORD,
-    dwReserved:  WIN32.DWORD,
-    pKeyStroke: ^KEYSTROKE) -> WIN32.DWORD ---
-}
-foreign xinput {
-  XInputGetState :: proc "stdcall" (
-    dwUserIndex: WIN32.DWORD,
-    pState:     ^STATE) -> WIN32.DWORD --- 
-}
-foreign xinput {
-  XInputSetState :: proc(
-  dwUserIndex: WIN32.DWORD,
-  pVibration: ^VIBRATION) -> WIN32.DWORD ---
-}
 
 // Multiple DLL loading
 
