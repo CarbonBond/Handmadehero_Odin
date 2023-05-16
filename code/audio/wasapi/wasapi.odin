@@ -29,8 +29,8 @@ init :: proc() {
 
 */
 
-// ************* STRUCTS/CLASS ********************
 
+// ************* CLASSES ********************
 /*  IMMDeviceEnumerator interface
 *   https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nn-mmdeviceapi-immdeviceenumerator
 *  
@@ -46,7 +46,7 @@ IMMDeviceEnumerator :: struct {
 
 // This contains the methods for IMMDeviceEnumerator and IUnknown
 vtable_IMMDeviceEnumerator :: struct {
-  using iunknown_vtale:   dxgi.IUknown_VTable
+  using iunknown_vtalbe:   dxgi.IUknown_VTable
 
   // Generates a collection of audio endpoint devices that meet the 
   // specified criteria
@@ -86,8 +86,90 @@ vtable_IMMDeviceEnumerator :: struct {
 }
 
 
-//TODO (Carbon) Add IMMNotificationClient
+IMMNotificationClient :: struct {
+  #subtype iunknown: DXGI.IUnknown
+  using vtable: ^vtable_IMMNotificationClient
+  //VTable 
+}
 
+vtable_IMMNotificationClient  :: struct {
+  using iunknown_vtable:   dxgi.IUknown_VTable
+
+  // Notifies client that default Endpoint device for a device role has changed.
+  OnDefaultDeviceChanged: proc "std" (
+    dataFlow:       EDataFlow, // Flow Direction (See EDataFlow in ENUM)
+    role:           ERole,      // Role of device (See ERole in ENUM)
+    ppEndpoint:   ^^IMMDevice  // Where the endpoint gets stored
+  ) -> WIN32.HRESULT
+
+  //Store Endpoint selected by an ID String.
+  GetDevice: proc "std" (
+    this:        ^IMMDeviceEnumerator,
+    pwstrId,      WIN32.LPCWSTR, // points to a string containing EndpoinT ID
+    ppDevice:   ^^IMMDevice      // Where the endpoint gets stored
+  ) -> WIN32.HRESULT
+
+  // Creates notification callback interface
+  RegisterEndpointNotificationCallback proc "std" ( 
+    pClient: ^IMMNotificationClient //Client registers for notification callback
+  ) -> WIN32.HRESULT 
+
+  // Deletes notification callback interface
+  UnregisterEndpointNotificationCallback proc "std" (
+    pClient: ^IMMNotificationClient //Client registers for notification callback
+  ) -> WIN32.HRESULT 
+
+}
+
+//TODO(Carbon) IMMDevice Class
+
+
+IMMNotificationClient :: struct {
+  #subtype iunknown: DXGI.IUnknown
+  using vtable: ^vtable_IMMNotificationClient
+  //VTable 
+}
+
+vtable_IMMNotificationClient  :: struct {
+  using iunknown_vtable:   dxgi.IUknown_VTable
+
+  // Notifies client that default Endpoint device for a device role has changed.
+  OnDefaultDeviceChanged: proc "std" (
+    flow:             EDataFlow,    // Flow Direction (See EDataFlow in ENUM)
+    role:                 ERole  ,      // Role of device (See ERole in ENUM)
+    pwstrDefaultDeviceID: WIN32.LPCWSTR // Endpoint identifier string
+  ) -> WIN32.HRESULT 
+
+  // Indicates new Endpoint device has been added
+  OnDeviceAdded: proc "std" (
+    pwstrDeviceId: WIN32.LPCWSTR // Endpoint identifier string
+  ) -> WIN32.HRESULT
+
+  // Indicates Endpoint device has been removed.
+  OnDeviceRemoved: proc "std" (
+    pwstrDeviceId: WIN32.LPCWSTR // Endpoint identifier string
+  ) -> WIN32.HRESULT
+
+  // Indicates Endpoint device state has changed
+  OnDeviceStateChanged: proc "std" (
+    pwstrDeviceId: WIN32.LPCWSTR // Endpoint identifier string
+    dwNewState:    WIN32.DWORD   // Takes a new state (See DEVICE STATE CONSTANTS)
+  ) -> WIN32.HRESULT
+
+  // Indicated a property has changed for an Endpoint Device
+  OnPropertValueChanged: proc "std" (
+    pwstrDeviceId: WIN32.LPCWSTR // Endpoint identifier string
+    key:           PROPERTYKEY   // Specifires property GUID and index
+  ) -> WIN32.HRESULT
+}
+
+
+// ************* STRUCTS ********************
+
+PROPERTYKEY : struct {
+  fmtid: DXGI.GUID
+  pid:   WIN32.DWORD
+}
 
 // ************* ENUMS *******************
 
