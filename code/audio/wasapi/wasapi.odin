@@ -173,13 +173,13 @@ vtable_IMMDeviceCollection :: struct {
 
   //Retrieveces a count of the devices in the device collection
   GetCount : proc "std" (
-    this:      ^IMMDeviceCollection
+    this:      ^IMMDeviceCollection,
     pcDevices: ^WIN32.UINT // writes number of devices in the device collection
   ) -> WIN32.HRESULT   
 
   //Retrieves a pointer to a specivied item in device collection.
   Item : proc "std" (
-    this:      ^IMMDeviceCollection
+    this:      ^IMMDeviceCollection,
     nDevice: WIN32.UINT // Device Number
     ppDevice: ^^IMMDevice // writes the IMMDevice interface 
   ) -> WIN32.HRESULT  
@@ -192,7 +192,7 @@ IPropertyStore :: struct {
 }
 
 vtable_IPropertyStore  :: struct {
-  using iunknown_vtable:   dxgi.IUknown_VTable,
+  using iunknown_vtable:   dxgi.IUnknown_VTable,
 
   // Gets the number of peoperties attached to the file
   GetCount : proc "std" (
@@ -204,7 +204,7 @@ vtable_IPropertyStore  :: struct {
   GetAt : proc "std" (
     this:   ^IPropertyStore
     iProp :  WIN32.DWORD, // index into array of PROPERTYKEY structs  
-    pkey:   ^PROPERTYKEY, // TDB (Litterally what is says in the docs lol)
+    pkey:   ^PROPERTYKEY, // TBB (Litterally what is says in the docs lol)
   ) -> WIN32.HRESULT,
 
   // Gets data for a specific property
@@ -234,7 +234,7 @@ IMMNotificationClient :: struct {
 }
 
 vtable_IMMNotificationClient  :: struct {
-  using iunknown_vtable:   dxgi.IUknown_VTable
+  using iunknown_vtable:   dxgi.IUnknown_VTable
 
   // Notifies client that default Endpoint device for a device role has changed.
   OnDefaultDeviceChanged: proc "std" (
@@ -283,11 +283,11 @@ vtable_IAudioClient :: struct {
   //Initializes audio stream
   Initialize: proc "std" (
     this:             ^IAudioClient,
-    ShareMode:          AUDCLNT_SHAREMODE, //Share with other devices (ENUM)
+    ShareMode:         AUDCLNT_SHAREMODE, //Share with other devices (ENUM)
     StreamFlags:       WIN32.DWORD,      // Controls creation of stream. 
     hnsBufferDuration: REFERENCE_TIME,   // buffer cap as time value. 100nano
     hnsPeriodicity:    REFERENCE_TIME,   // Device period. != 0 in exclusive
-    pFormat:           ^WAVEFORMATEX,    // format descriptor see WAVEFORMATEX
+    pFormat:          ^WAVEFORMATEX,    // format descriptor see WAVEFORMATEX
     AudioSessionGuid:  WIN32.LPCGUID     // Audio Session GUID
   ) -> WIN32.HRESULT
 
@@ -353,7 +353,7 @@ vtable_IAudioClient :: struct {
 }
 
 IAudioClient2 :: struct {
-  #subtype iunknown: DXGI.IUnknown
+  #subtype iaudioclient: IAudioClient
   using vtable: ^vtable_IAudioClient2
   //VTable 
 }
@@ -377,15 +377,79 @@ vtable_IAudioClient2 :: struct {
     pFormat:               ^WAVEFORMATEX,  // Target format for buffer size
     bEventDriven:           WIN32.BOOL,    // Can this be event driven
     phnsMinBufferDuration: ^REFERENCE_TIME,// writes minimum buffer size
-    phnsMaxBufferDuration: ^REFERENCE_TIME,// writes maximum buffer size
+    phnsMaxBufferDuration: ^REFERENCE_TIME// writes maximum buffer size
   ) -> WIN32.HRESULT,
 }
 
-//#TODO(carbon) AudioClient3
+IAudioClient3 :: struct {
+  #subtype iaudioclient2: IAudioClient2
+  using vtable: ^vtable_IAudioClient3
+  //VTable 
+}
+
+vtable_IAudioClient3 :: struct {
+  using vtable_iaudioclient2: vtable_IAudioClient2,
+
+  GetSharedModeEnginePeriod: proc "std" (
+    this:                       ^IAudioClient3, 
+
+    // supported periodicities queried for this format
+    pFormat:                    ^WAVEFORMATEX, 
+
+    // default period engine will wake client for transfer
+    pDefaultPeriodInFrames:     ^WIN32.UINT32,
+
+    // fundamental period, engine periodicty must be integral multiple of this values
+    pFundamentalPeriodInFrames: ^WIN32.UINT32, 
+
+    // shortest period in frames which client will wake up for
+    pMinPeriodInFrames:         ^WIN32.UINT32, // 
+
+    // longest period in frames which client will wake up for
+    pMaxPeriodInFrames:         ^WIN32.UINT32, //
+  ) -> WIN32.HRESULT,
+
+  GetCurrentSharedModeEnginePeriod: proc "std" (
+    this:     ^IAudioClient3,
+    ppFormat: ^^WAVEFORMATEX, // current device formate
+    pCurrentPeriodInFrames: ^WIN32.UINT32 // writes current period of engine in frames 
+  ) -> WIN32.HRESULT,
+
+  InitializeSharedAudioStream: proc "std" (
+    this:            ^IAudioClient3, 
+    StreamFlags:      WIN32.DWORD,  // AUDCLNT STREAMFLAGS/SESSIONFLAG constants
+    PeriodInFrames:   WIN32.UINT32, // Periodicity requested from client
+    pFormat:         ^WAVEFORMATEX, // formate desciptor
+    AUdioSessionGuid: WIN32.LPCGUID // session GUID, Optional
+  ) -> WIN32.HRESULT
+}
+
+
+IAudioRenderClient :: struct {
+  #subtype iunknown: DXGI.IUnknown
+  using vtable: ^vtable_IAudioRenderClient
+  //VTable 
+}
+
+vtable_IAudioRenderClient  :: struct {
+  using iunknown_vtable:   dxgi.IUnknown_VTable,
+
+  GetBuffer: proc "std" (
+    this:              ^IAudioRenderClient
+    NumFramesRequested: WIN32.UINT32 // number of audio frames in data packet
+    ppData:           ^^WIN32.BYTE   // writes starting address of buffer
+  ) -> WIN32.HRESULT,
+  ReleaseBuffer: proc "std" (
+    this:            ^IAudioRenderClient
+    NumFramesWritten: WIN32.UINT32 // Frames written by client to packet
+    dwFlags:          WIN32.DWORD  // buffer config flags
+  ) -> WIN32.HRESULT
+}
 
 // ************* TYPES/STRUCTS ********************
-PROPVARIANT ::  distinct rawptr //TODO(Carbon) Should I fully implement this?
+PROPVARIANT    ::  distinct rawptr //TODO(Carbon) Should I fully implement this?
 REFERENCE_TIME :: i64
+REFPEOPERTYKEY :: WIN32.DWORD
 
 // ************* STRUCTS ********************
 
@@ -466,6 +530,13 @@ AUDCLNT_SHAREMODE : enum i32 {
   AUDCLNT_SHAREMODE_SHARED,
   AUDCLNT_SHAREMODE_EXCLUSIVE
 }
+
+AUDCLNT_BUFFERFLAGS : enum i32 {
+  AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY,
+  AUDCLNT_BUFFERFLAGS_SILENT,
+  AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR
+}
+
 /* The following methods use AUDCLNT_SHAREMODE:
 *  IAudioClient:  Initialize IsFormatSupported 
 */
@@ -501,9 +572,6 @@ CLSCTX_ALLOW_LOWER_TRUST_REGISTRATION,
 CLSCTX_PS_DLL = 0x80000000
 */ 
 
-CLSCTX_STD :: WIN32.CLSCTX_INPROC_SERVER | WIN32.CLSCTX_INPROC_HANDLER | 
-              WIN32.CLSCTX_LOCAL_SERVER  | WIN32.CLSCTX_REMOTE_SERVER
-
 // ************* CONSTANTS *******************
 
 // Device States Constatns (Can use logical OR)
@@ -538,5 +606,21 @@ AUDCLNT_SESSIONFLAGS_DISPLAY_HIDEWHENEXPIRED :: 0x40000000
 CLSCTX_ALL :: windows.CLSCTX_INPROC_SERVER | windows.CLSCTX_INPROC_HANDLER | windows.CLSCTX_LOCAL_SERVER | windows.CLSCTX_REMOTE_SERVER
 CLSID_MMDeviceEnumerator := IAudioClient_UUID_STRING :: "1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"
 
+IMMDevice_UUID_STRING :: "D666063F-1587-4E43-81F1-B948E807363F"
+IMMDevice_UUID := &dxgi.IID{0xD666063F, 0x1587, 0x4E43, {0x81, 0xF1, 0xB9, 0x48, 0xE8, 0x07, 0x36, 0x3F}}
+
+IMMDeviceCollection_UUID_STRING :: "0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"
+IMMDeviceCollection_UUID := &dxgi.IID{0x0BD7A1BE, 0x7A1A, 0x44DB, {0x83, 0x97, 0xCC, 0x53, 0x92, 0x38, 0x7B, 0x5E}}
+
 IAudioClient_UUID_STRING :: "1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"
 IAudioClient_UUID := &dxgi.IID{0x1CB9AD4C, 0xDBFA, 0x4c32, {0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2}}windows.GUID{0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}}
+
+IAudioClient2_UUID_STRING :: "726778CD-F60A-4eda-82DE-E47610CD78AA"
+IAudioClient2_UUID := &dxgi.IID{0x726778CD, 0xF60A, 0x4eda, {0x82, 0xDE, 0xE4, 0x76, 0x10, 0xCD, 0x78, 0xAA}}
+
+IAudioClient3_UUID_STRING :: "7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42"
+IAudioClient3_UUID := &dxgi.IID{0x7ED4EE07, 0x8E67, 0x4CD4, {0x8C, 0x1A, 0x2B, 0x7A, 0x59, 0x87, 0xAD, 0x42}}
+
+IAudioRenderClient_UUID_STRING :: "F294ACFC-3146-4483-A7BF-ADDCA7C260E2"
+IAudioRenderClient_UUID := &dxgi.IID{0xF294ACFC, 0x3146, 0x4483, {0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2}}
+
