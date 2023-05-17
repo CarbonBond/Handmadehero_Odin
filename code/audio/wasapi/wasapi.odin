@@ -283,7 +283,7 @@ vtable_IAudioClient :: struct {
   //Initializes audio stream
   Initialize: proc "std" (
     this:             ^IAudioClient,
-    SharMode:          AUDCLNT_SHAREMODE, //Share with other devices (ENUM)
+    ShareMode:          AUDCLNT_SHAREMODE, //Share with other devices (ENUM)
     StreamFlags:       WIN32.DWORD,      // Controls creation of stream. 
     hnsBufferDuration: REFERENCE_TIME,   // buffer cap as time value. 100nano
     hnsPeriodicity:    REFERENCE_TIME,   // Device period. != 0 in exclusive
@@ -294,62 +294,66 @@ vtable_IAudioClient :: struct {
   //Retrieves the max capacity of the endpoint buffer
   GetBufferSize: proc "std" (
     this: ^IAudioClient,
+    pNumBufferFrames: ^WIN32.UINT32 // writes number of audio frames buffer can hold
   ) -> WIN32.HRESULT
 
   // retrieves the max latency for current steam
   GetStreamLatency: proc "std" (
     this: ^IAudioClient,
+    phnsLatency: ^REFERENCE_TIME // writes the time in 100-nanosecond units
   ) -> WIN32.HRESULT
 
   // retrieves the number of frames of padding in endpoint buffer
   GetCurrentPadding: proc "std" (
     this: ^IAudioClient,
+    pNumPaddingFrames: ^WIN32.UINT32 // writes the frame count
   ) -> WIN32.HRESULT
 
   // indicated whether endpoint device supports a stream format
   IsFormatSupported: proc "std" (
     this: ^IAudioClient,
+    ShareMode: AUDCLNT_SHAREMODE,  // exclusive or shared mode
+    pFormat: ^WAVEFORMATEX         // specified formate 
+    ppClosestMatch: ^^WAVEFORMATEX // Write closest format to pFormat
   ) -> WIN32.HRESULT
 
   // retrieves stream format that audio engine uses for internal processing.
   GetMixFormat: proc "std" (
     this: ^IAudioClient,
+    ppDeviceFormat: ^^WAVEFORMATEX // writes address of mix formate
   ) -> WIN32.HRESULT
 
   // Retrieves the length of the periodic interval for processing pases
   GetDevicePeriod: proc "std" (
     this: ^IAudioClient,
+    phnsDefaultDevicePeriod: ^REFERENCE_TIME //Writes default interval between processing passes
+    phnsMinimumDevicePeriod: ^REFERENCE_TIME //Writes minimum interval between processing passes
   ) -> WIN32.HRESULT
 
   // Start the audio stream
-  Start: proc "std" (
-    this: ^IAudioClient,
-  ) -> WIN32.HRESULT
-
+  Start: proc "std" ( this: ^IAudioClient) -> WIN32.HRESULT
   // Stop the audio stream
-  Stop: proc "std" (
-    this: ^IAudioClient,
-  ) -> WIN32.HRESULT
-
+  Stop:  proc "std" ( this: ^IAudioClient) -> WIN32.HRESULT
   // resets audio stream
-  Reset: proc "std" (
-    this: ^IAudioClient,
-  ) -> WIN32.HRESULT
+  Reset: proc "std" ( this: ^IAudioClient,) -> WIN32.HRESULT
   
   // Sets event handle that the system signals when buffer is ready.
   SetEventHandle: proc "std" (
     this: ^IAudioClient,
+    eventHandle: WIN32.HANDLE
   ) -> WIN32.HRESULT
 
   // accesses additional services from audio client
   GetService: proc "std" (
     this: ^IAudioClient,
+    riid: REFIID // Interface ID for requested service
+    ppv: ^^rawptr // writes address of an instance of request interface.
   ) -> WIN32.HRESULT
 
 }
 
 
-// ************* STRUCTS ********************
+// ************* TYPES/STRUCTS ********************
 
 PROPERTYKEY : struct {
   fmtid: DXGI.GUID
@@ -367,6 +371,8 @@ WAVEFORMATEX {
   wBitsPerSample:  WIN32.WORD
   cbSize:          WIN32.WORD
 }
+
+REFERENCE_TIME :: i64
 
 // ************* ENUMS *******************
 
