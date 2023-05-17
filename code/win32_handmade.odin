@@ -20,8 +20,10 @@ foreign gdi32 {
 @private
 running            : bool
 globalBuffer       : w_offscreen_buffer
+globalAudio        : w_audio
 
 S_OK :: WIN32.HRESULT(0)
+TONE_WAVELENGTH :: 440
 
 
 w_offscreen_buffer :: struct {
@@ -30,6 +32,17 @@ w_offscreen_buffer :: struct {
         width         : i32
         height        : i32
         pitch         : i32
+}
+
+w_audio :: struct {
+  client: ^WASAPI.IAudioClient2
+  renderClient: ^WASAPI.IAudioRenderClient
+  playbackTime: f64 
+  wavePeriod :  f64
+  defaultPeriod: WASAPI.REFERENCE_TIME
+  minPeriod: WASAPI.REFERENCE_TIME
+  framesPerPeriod: int
+  bufferSizeFrames: u32
 }
 
 main :: proc() {
@@ -70,15 +83,19 @@ main :: proc() {
       //             We can use one DC
       deviceContext := WIN32.GetDC(window)
 
-      initWasapi()
-
       blueOffset  : i32 = 0
       greenOffset : i32 = 0
       redOffset   : i32 = 0
 
+      //NOTE(Carbon): TESTING WASAPI 
 
+      audioSuccess := wInitAudio(&globalAudio)
+      defer WIN32.CoUninitialize()
+      
       running = true 
       for running {
+
+        if audioSuccess do playAudio(&globalAudio) 
 
         message: WIN32.MSG
         for WIN32.PeekMessageW(&message, nil, 0, 0, WIN32.PM_REMOVE) {
@@ -317,13 +334,9 @@ wWindowDemensions :: proc "std" (window : WIN32.HWND) -> (width, height: i32) {
 }
 
 
-initWasapi :: proc() -> bool {
-      //NOTE(Carbon): TESTING WASAPI, CURRENTLY HANGS HERE.
-      
-      hr := WIN32.CoInitializeEx(nil, WIN32.COINIT.SPEED_OVER_MEMORY)
-      defer WIN32.CoUninitialize()
+wInitAudio :: proc(audio: ^w_audio) -> bool {
 
-      assert(hr == S_OK)
+      hr := WIN32.CoInitializeEx(nil, WIN32.COINIT.SPEED_OVER_MEMORY)
 
       deviceEnumerator : ^WASAPI.IMMDeviceEnumerator
       hr = WIN32.CoCreateInstance(
@@ -334,21 +347,20 @@ initWasapi :: proc() -> bool {
         cast(^rawptr)&deviceEnumerator,
       )
 
-      assert(hr == S_OK)
+      if hr != S_OK { return false }
 
       audioDevice: ^WASAPI.IMMDevice
       hr = deviceEnumerator->GetDefaultAudioEndpoint(WASAPI.EDataFlow.eRender,
                                                       WASAPI.ERole.eConsole,
                                                       &audioDevice)
-      assert(hr == S_OK)
+      if hr != S_OK { return false }
 
       deviceEnumerator->Release()
-      audioClient: ^WASAPI.IAudioClient2
       hr = audioDevice->Activate(WASAPI.IAudioClient2_UUID,
                                   WASAPI.CLSCTX_ALL, nil
-                                  cast(^rawptr)&audioClient)
+                                  cast(^rawptr)&audio.client)
       
-      assert(hr == S_OK)
+      if hr != S_OK { return false }
 
       audioDevice->Release()
 
@@ -367,62 +379,53 @@ initWasapi :: proc() -> bool {
 
       REFTIMES_PER_SEC :: 8 * 1_000_000 // Milliseconds
       requested_buffer_duration: i64 = REFTIMES_PER_SEC
-      hr = audioClient->Initialize(WASAPI.AUDCLNT_SHAREMODE.SHARED,
+      hr = audio.client->Initialize(WASAPI.AUDCLNT_SHAREMODE.SHARED,
                                     init_stream_flags,
                                     requested_buffer_duration
                                     0,
                                     &mix_format,
                                     nil)
 
-      assert(hr == S_OK)
 
-      audioRenderClient: ^WASAPI.IAudioRenderClient
-      hr = audioClient->GetService(WASAPI.IAudioRenderClient_UUID,
-                                   cast(^rawptr)&audioRenderClient)
+      hr = audio.client->GetService(WASAPI.IAudioRenderClient_UUID,
+                                   cast(^rawptr)&audio.renderClient)
 
-      assert(hr == S_OK)
+      audio.playbackTime = 1
+      audio.wavePeriod = f64(44100. / TONE_WAVELENGTH)
+      audio.client->GetDevicePeriod(&audio.defaultPeriod, &audio.minPeriod)
+      audio.framesPerPeriod = int(44100 * 
+                              (f64(audio.defaultPeriod) / (10000.0 * 1000.0)) + 0.5) 
 
-      bufferSizeFrames: u32 = 0
-      hr = audioClient->GetBufferSize(&bufferSizeFrames)
-      assert(hr == S_OK)
-      hr = audioClient->Start()
-      assert(hr == S_OK)
-      
-      playbackTime: f64 = 1
-      wavePeriod := f64(44100. / 440.)
-      defaultPeriod: WASAPI.REFERENCE_TIME = 0
-      minPeriod: WASAPI.REFERENCE_TIME = 0
-      audioClient->GetDevicePeriod(&defaultPeriod, &minPeriod)
-      framesPerPeriod := int(44100 * 
-                              (f64(defaultPeriod) / (10000.0 * 1000.0)) + 0.5) 
+      hr = audio.client->GetBufferSize(&audio.bufferSizeFrames)
+      hr = audio.client->Start()
 
-      for {
+
+      return true
+}
+
+playAudio :: proc (audio: ^w_audio) {
+        // AUDIO  TESTING
         bufferPadding: u32
-        hr = audioClient->GetCurrentPadding(&bufferPadding)
+        hr := audio.client->GetCurrentPadding(&bufferPadding)
         assert(hr == S_OK)
-        latency := bufferSizeFrames / 72
+        latency := audio.bufferSizeFrames / 72
         nFramesToWrite := latency - bufferPadding
-        if nFramesToWrite <= 0 do continue
+        if nFramesToWrite <= 0 do return
 
         buffer: ^i16
-        hr = audioRenderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
+        hr = audio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
         assert(hr == S_OK)
 
         for frameIndex := 0; frameIndex < int(nFramesToWrite); frameIndex += 1 {
-          amp := 300 * MATH.sin(playbackTime)
+          amp := 300 * MATH.sin(audio.playbackTime)
           buffer^ = i16(amp)
           buffer = MEM.ptr_offset(buffer, 1)
           buffer^ = i16(amp)
           buffer = MEM.ptr_offset(buffer, 1)
-          playbackTime += 6.28 / wavePeriod
-          if playbackTime > 6.28 do playbackTime -= 6.28
+          audio.playbackTime += 6.28 / audio.wavePeriod
+          if audio.playbackTime > 6.28 do audio.playbackTime -= 6.28
         }
-        hr = audioRenderClient->ReleaseBuffer(nFramesToWrite, 0)
+        hr = audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
         assert(hr == S_OK)
-
-      }
-
-      return true
-
+        //AUDIO TESTING END
 }
-/******************************************************************************/
