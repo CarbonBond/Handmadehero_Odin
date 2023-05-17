@@ -352,15 +352,55 @@ vtable_IAudioClient :: struct {
 
 }
 
+IAudioClient2 :: struct {
+  #subtype iunknown: DXGI.IUnknown
+  using vtable: ^vtable_IAudioClient2
+  //VTable 
+}
+
+vtable_IAudioClient2 :: struct {
+  using vtable_iaudioclient: vtable_IAudioClient,
+
+  IsOffloadCapable: proc "std" (
+    this:             ^IAudioClient2,
+    Category:          AUDIO_STEAM_CATEGORY, // SEE ENUM
+    pbOffloadCapable: ^WIN32.BOOL            // Writes TRUE if offload-capable
+  ) -> WIN32.HRESULT,
+
+  SetClientProperties: proc "std" (
+    this:        ^IAudioClient2,
+    pProperties: ^AudioClientProperties //See AudioClientProperties Struct
+  ) -> WIN32.HRESULT,
+
+  GetBufferSizeLimits: proc "std" (
+    this:                  ^IAudioClient2, 
+    pFormat:               ^WAVEFORMATEX,  // Target format for buffer size
+    bEventDriven:           WIN32.BOOL,    // Can this be event driven
+    phnsMinBufferDuration: ^REFERENCE_TIME,// writes minimum buffer size
+    phnsMaxBufferDuration: ^REFERENCE_TIME,// writes maximum buffer size
+  ) -> WIN32.HRESULT,
+}
+
+//#TODO(carbon) AudioClient3
 
 // ************* TYPES/STRUCTS ********************
+PROPVARIANT ::  distinct rawptr //TODO(Carbon) Should I fully implement this?
+REFERENCE_TIME :: i64
+
+// ************* STRUCTS ********************
 
 PROPERTYKEY : struct {
   fmtid: DXGI.GUID
   pid:   WIN32.DWORD
 }
 
-PROPVARIANT ::  distinct rawptr //TODO(Carbon) Should I fully implement this?
+AudioClientProperties : struct {
+  cbSize:     WIN32.UINT32
+  bIsOffload: WIN32.BOOL
+  eCategory:  AUDIO_STREAM_CATEGORY
+  Options:    AUDCLNT_STREAMOPTIONS
+
+}
 
 WAVEFORMATEX {
   wFormatTag:      WIN32.WORD
@@ -371,8 +411,6 @@ WAVEFORMATEX {
   wBitsPerSample:  WIN32.WORD
   cbSize:          WIN32.WORD
 }
-
-REFERENCE_TIME :: i64
 
 // ************* ENUMS *******************
 
@@ -398,6 +436,31 @@ ERole : enum i32 {
 *  IMMDeviceEnumerator:   GetDefaultAudioEndpoint 
 *  IMMNotificationClient: OnDefaultDeviceChanged
 */
+
+AUDIO_STREAM_CATEGORY : enum i32 (
+  AudioCategory_Other,
+  AudioCategory_ForegroundOnlyMedia,
+  AudioCategory_BackgroundCapableMedia,
+  AudioCategory_Communications,
+  AudioCategory_Alerts,
+  AudioCategory_SoundEffects,
+  AudioCategory_GameEffects,
+  AudioCategory_GameMedia,
+  AudioCategory_GameChat,
+  AudioCategory_Speech,
+  AudioCategory_Movie,
+  AudioCategory_Media,
+  AudioCategory_FarFieldSpeech,
+  AudioCategory_UniformSpeech,
+  AudioCategory_VoiceTyping
+}
+
+AUDCLNT_STREAMOPTIONS : enum i32 {
+  AUDCLNT_STREAMOPTIONS_NONE,
+  AUDCLNT_STREAMOPTIONS_RAW,
+  AUDCLNT_STREAMOPTIONS_MATCH_FORMAT,
+  AUDCLNT_STREAMOPTIONS_AMBISONICS
+}
 
 AUDCLNT_SHAREMODE : enum i32 {
   AUDCLNT_SHAREMODE_SHARED,
