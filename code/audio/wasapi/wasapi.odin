@@ -38,14 +38,14 @@ init :: proc() {
 *   https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nn-unknwn-iunknown
 */ 
 
-IMMDeviceEnumerator :: struct {
+IMMDeviceEnumerator :: struct #raw_union {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IMMDeviceEnumerator
   //VTable 
 }
 
 vtable_IMMDeviceEnumerator :: struct {
-  using iunknown_vtalbe:   DXGI.IUnknown_VTable,
+  using iunknown_vtable:   DXGI.IUnknown_VTable,
 
   // Generates a collection of audio endpoint devices that meet the 
   // specified criteria
@@ -84,7 +84,7 @@ vtable_IMMDeviceEnumerator :: struct {
   ) -> WIN32.HRESULT 
 }
 
-IMMDevice  :: struct {
+IMMDevice  :: struct #raw_union  {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IMMDevice
   //VTable 
@@ -99,14 +99,14 @@ vtable_IMMDevice   :: struct {
     iid:                 WIN32.REFIID, // reference to a GUID
     dwClsCts:            WIN32.DWORD,  // Context restriction (CLSCTX enum)
     pActivationParams:  ^PROPVARIANT,  // for type of interface (IAudio = NULL)
-    ppInterface:       ^^rawptr //TODO(Carbon) is a double rawptr the best?
+    ppInterface:        ^rawptr 
   ) -> WIN32.HRESULT,
 
   // retrieves an interface to the device's property store.
   OpenPropertyStore: proc "std" (
-    this:      ^IMMDevice
-    stgmAccess: WIN32.DWORD // Storage Access mode for read, write, or r/w mode.
-    ppProperties: ^^IPropertyStore // Writes address of IPropertyStore interface.
+    this:         ^IMMDevice
+    stgmAccess:    WIN32.DWORD // Storage Access mode for read, write, or r/w mode.
+    ppProperties: ^IPropertyStore // Writes address of IPropertyStore interface.
   ) -> WIN32.HRESULT,
 
   // Retrieves an endpoint ID string that identifites the Enpoint device
@@ -123,7 +123,7 @@ vtable_IMMDevice   :: struct {
 
 }
 
-IMMDeviceCollection :: struct {
+IMMDeviceCollection :: struct #raw_union {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IMMDeviceCollection 
   //VTable 
@@ -146,7 +146,7 @@ vtable_IMMDeviceCollection :: struct {
   ) -> WIN32.HRESULT  
 }
 
-IPropertyStore :: struct {
+IPropertyStore :: struct #raw_union {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IPropertyStore
   //VTable 
@@ -188,7 +188,7 @@ vtable_IPropertyStore  :: struct {
 }
 
 
-IMMNotificationClient :: struct {
+IMMNotificationClient :: struct #raw_union {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IMMNotificationClient
   //VTable 
@@ -232,7 +232,7 @@ vtable_IMMNotificationClient  :: struct {
   ) -> WIN32.HRESULT
 }
 
-IAudioClient :: struct {
+IAudioClient :: struct #raw_union {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IAudioClient
   //VTable 
@@ -308,12 +308,12 @@ vtable_IAudioClient :: struct {
   GetService: proc "std" (
     this: ^IAudioClient,
     riid: WIN32.REFIID // Interface ID for requested service
-    ppv: ^^rawptr // writes address of an instance of request interface.
+    ppv: ^rawptr // writes address of an instance of request interface.
   ) -> WIN32.HRESULT
 
 }
 
-IAudioClient2 :: struct {
+IAudioClient2 :: struct #raw_union {
   #subtype iaudioclient: IAudioClient
   using vtable: ^vtable_IAudioClient2
   //VTable 
@@ -342,7 +342,7 @@ vtable_IAudioClient2 :: struct {
   ) -> WIN32.HRESULT,
 }
 
-IAudioClient3 :: struct {
+IAudioClient3 :: struct #raw_union {
   #subtype iaudioclient2: IAudioClient2
   using vtable: ^vtable_IAudioClient3
   //VTable 
@@ -386,7 +386,7 @@ vtable_IAudioClient3 :: struct {
 }
 
 
-IAudioRenderClient :: struct {
+IAudioRenderClient :: struct #raw_union {
   #subtype iunknown: DXGI.IUnknown
   using vtable: ^vtable_IAudioRenderClient
   //VTable 
@@ -463,39 +463,39 @@ ERole :: enum i32 {
 */
 
 AUDIO_STREAM_CATEGORY :: enum i32 {
-  AudioCategory_Other,
-  AudioCategory_ForegroundOnlyMedia,
-  AudioCategory_BackgroundCapableMedia,
-  AudioCategory_Communications,
-  AudioCategory_Alerts,
-  AudioCategory_SoundEffects,
-  AudioCategory_GameEffects,
-  AudioCategory_GameMedia,
-  AudioCategory_GameChat,
-  AudioCategory_Speech,
-  AudioCategory_Movie,
-  AudioCategory_Media,
-  AudioCategory_FarFieldSpeech,
-  AudioCategory_UniformSpeech,
-  AudioCategory_VoiceTyping
+  Other,
+  ForegroundOnlyMedia,
+  BackgroundCapableMedia,
+  Communications,
+  Alerts,
+  SoundEffects,
+  GameEffects,
+  GameMedia,
+  GameChat,
+  Speech,
+  Movie,
+  Media,
+  FarFieldSpeech,
+  UniformSpeech,
+  VoiceTyping
 }
 
 AUDCLNT_STREAMOPTIONS :: enum i32 {
-  AUDCLNT_STREAMOPTIONS_NONE,
-  AUDCLNT_STREAMOPTIONS_RAW,
-  AUDCLNT_STREAMOPTIONS_MATCH_FORMAT,
-  AUDCLNT_STREAMOPTIONS_AMBISONICS
+  NONE,
+  RAW,
+  MATCH_FORMAT,
+  AMBISONICS
 }
 
 AUDCLNT_SHAREMODE :: enum i32 {
-  AUDCLNT_SHAREMODE_SHARED,
-  AUDCLNT_SHAREMODE_EXCLUSIVE
+  SHARED,
+  EXCLUSIVE
 }
 
 AUDCLNT_BUFFERFLAGS :: enum i32 {
-  AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY,
-  AUDCLNT_BUFFERFLAGS_SILENT,
-  AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR
+  DATA_DISCONTINUITY,
+  SILENT,
+  TIMESTAMP_ERROR
 }
 
 /* The following methods use AUDCLNT_SHAREMODE:
@@ -569,6 +569,9 @@ CLSID_MMDeviceEnumerator := WIN32.GUID{0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 
 
 IMMDevice_UUID_STRING :: "D666063F-1587-4E43-81F1-B948E807363F"
 IMMDevice_UUID := &DXGI.IID{0xD666063F, 0x1587, 0x4E43, {0x81, 0xF1, 0xB9, 0x48, 0xE8, 0x07, 0x36, 0x3F}}
+
+IMMDeviceEnumerator_UUID_STRING :: "A95664D2-9614-4F35-A746-DE8DB63617E6"
+IMMDeviceEnumerator_UUID := &DXGI.IID{0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}}
 
 IMMDeviceCollection_UUID_STRING :: "0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"
 IMMDeviceCollection_UUID := &DXGI.IID{0x0BD7A1BE, 0x7A1A, 0x44DB, {0x83, 0x97, 0xCC, 0x53, 0x92, 0x38, 0x7B, 0x5E}}

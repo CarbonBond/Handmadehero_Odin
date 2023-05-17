@@ -3,8 +3,11 @@ package main
 import FMT     "core:fmt"
 import UTF16   "core:unicode/utf16"
 import WIN32   "core:sys/windows"
+import MATH    "core:math"
+import MEM     "core:mem"
+
 import XINPUT  "xinput" 
-import WAVEOUT "audio/wasapi"
+import WASAPI  "audio/wasapi"
 import H       "helper"
 
 foreign import gdi32 "system:Gdi32.lib"
@@ -17,6 +20,8 @@ foreign gdi32 {
 @private
 running            : bool
 globalBuffer       : w_offscreen_buffer
+
+S_OK :: WIN32.HRESULT(0)
 
 
 w_offscreen_buffer :: struct {
@@ -64,10 +69,13 @@ main :: proc() {
       //NOTE(Carbon) As we use CS_OWNDC we don't share the context 
       //             We can use one DC
       deviceContext := WIN32.GetDC(window)
-      
+
+      initWasapi()
+
       blueOffset  : i32 = 0
       greenOffset : i32 = 0
       redOffset   : i32 = 0
+
 
       running = true 
       for running {
@@ -226,7 +234,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
   return result
 }
 
-wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer, 
+wResizeDIBSection :: proc "std" (bitmap: ^w_offscreen_buffer, 
                                          width, height: i32) {
 
   if bitmap.memory != nil {
@@ -255,7 +263,7 @@ wResizeDIBSection :: proc "contextless" (bitmap: ^w_offscreen_buffer,
 
 }
 
-wDisplayBufferInWindow :: proc "contextless" (deviceContext: WIN32.HDC, 
+wDisplayBufferInWindow :: proc "std" (deviceContext: WIN32.HDC, 
                                      windowWidth, windowHeight: i32,
                                      bitmap: ^w_offscreen_buffer) {
 
@@ -278,7 +286,7 @@ wDisplayBufferInWindow :: proc "contextless" (deviceContext: WIN32.HDC,
 
 }
 
-wRenderWeirdGradiant :: proc "contextless" (bitmap: ^w_offscreen_buffer,
+wRenderWeirdGradiant :: proc "std" (bitmap: ^w_offscreen_buffer,
                                             greenOffset, blueOffset, redOffset: i32) {
 
   bitmapMemoryArray := bitmap.memory[:]
@@ -300,7 +308,7 @@ wRenderWeirdGradiant :: proc "contextless" (bitmap: ^w_offscreen_buffer,
   }
 }
 
-wWindowDemensions :: proc "contextless" (window : WIN32.HWND) -> (width, height: i32) {
+wWindowDemensions :: proc "std" (window : WIN32.HWND) -> (width, height: i32) {
         clientRect: WIN32.RECT 
         WIN32.GetClientRect(window, &clientRect)
         width  = clientRect.right - clientRect.left
@@ -308,3 +316,113 @@ wWindowDemensions :: proc "contextless" (window : WIN32.HWND) -> (width, height:
         return
 }
 
+
+initWasapi :: proc() -> bool {
+      //NOTE(Carbon): TESTING WASAPI, CURRENTLY HANGS HERE.
+      
+      hr := WIN32.CoInitializeEx(nil, WIN32.COINIT.SPEED_OVER_MEMORY)
+      defer WIN32.CoUninitialize()
+
+      assert(hr == S_OK)
+
+      deviceEnumerator : ^WASAPI.IMMDeviceEnumerator
+      hr = WIN32.CoCreateInstance(
+        &WASAPI.CLSID_MMDeviceEnumerator,
+        nil,
+        WASAPI.CLSCTX_ALL,
+        WASAPI.IMMDeviceEnumerator_UUID,
+        cast(^rawptr)&deviceEnumerator,
+      )
+
+      assert(hr == S_OK)
+
+      audioDevice: ^WASAPI.IMMDevice
+      hr = deviceEnumerator->GetDefaultAudioEndpoint(WASAPI.EDataFlow.eRender,
+                                                      WASAPI.ERole.eConsole,
+                                                      &audioDevice)
+      assert(hr == S_OK)
+
+      deviceEnumerator->Release()
+      audioClient: ^WASAPI.IAudioClient2
+      hr = audioDevice->Activate(WASAPI.IAudioClient2_UUID,
+                                  WASAPI.CLSCTX_ALL, nil
+                                  cast(^rawptr)&audioClient)
+      
+      assert(hr == S_OK)
+
+      audioDevice->Release()
+
+      mix_format: WASAPI.WAVEFORMATEX = {
+        wFormatTag      = 1, // WAVE_FORMAT_PCM
+        nChannels       = 2,
+        nSamplesPerSec  = 44100,
+        wBitsPerSample  = 16,
+        nBlockAlign     = 2 * 16 / 8, // nChannel * wBitsPerSample / 8
+        nAvgBytesPerSec = 44100 * 2 * 16 / 8, //nSamplesPerSec * nBlockAlign
+      }
+
+      init_stream_flags : u32 = WASAPI.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
+                          WASAPI.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY|
+                          WASAPI.AUDCLNT_STREAMFLAGS_RATEADJUST
+
+      REFTIMES_PER_SEC :: 8 * 1_000_000 // Milliseconds
+      requested_buffer_duration: i64 = REFTIMES_PER_SEC
+      hr = audioClient->Initialize(WASAPI.AUDCLNT_SHAREMODE.SHARED,
+                                    init_stream_flags,
+                                    requested_buffer_duration
+                                    0,
+                                    &mix_format,
+                                    nil)
+
+      assert(hr == S_OK)
+
+      audioRenderClient: ^WASAPI.IAudioRenderClient
+      hr = audioClient->GetService(WASAPI.IAudioRenderClient_UUID,
+                                   cast(^rawptr)&audioRenderClient)
+
+      assert(hr == S_OK)
+
+      bufferSizeFrames: u32 = 0
+      hr = audioClient->GetBufferSize(&bufferSizeFrames)
+      assert(hr == S_OK)
+      hr = audioClient->Start()
+      assert(hr == S_OK)
+      
+      playbackTime: f64 = 1
+      wavePeriod := f64(44100. / 440.)
+      defaultPeriod: WASAPI.REFERENCE_TIME = 0
+      minPeriod: WASAPI.REFERENCE_TIME = 0
+      audioClient->GetDevicePeriod(&defaultPeriod, &minPeriod)
+      framesPerPeriod := int(44100 * 
+                              (f64(defaultPeriod) / (10000.0 * 1000.0)) + 0.5) 
+
+      for {
+        bufferPadding: u32
+        hr = audioClient->GetCurrentPadding(&bufferPadding)
+        assert(hr == S_OK)
+        latency := bufferSizeFrames / 72
+        nFramesToWrite := latency - bufferPadding
+        if nFramesToWrite <= 0 do continue
+
+        buffer: ^i16
+        hr = audioRenderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
+        assert(hr == S_OK)
+
+        for frameIndex := 0; frameIndex < int(nFramesToWrite); frameIndex += 1 {
+          amp := 300 * MATH.sin(playbackTime)
+          buffer^ = i16(amp)
+          buffer = MEM.ptr_offset(buffer, 1)
+          buffer^ = i16(amp)
+          buffer = MEM.ptr_offset(buffer, 1)
+          playbackTime += 6.28 / wavePeriod
+          if playbackTime > 6.28 do playbackTime -= 6.28
+        }
+        hr = audioRenderClient->ReleaseBuffer(nFramesToWrite, 0)
+        assert(hr == S_OK)
+
+      }
+
+      return true
+
+}
+/******************************************************************************/
