@@ -45,7 +45,7 @@ IMMDeviceEnumerator :: struct {
 }
 
 vtable_IMMDeviceEnumerator :: struct {
-  using iunknown_vtalbe:   dxgi.IUnknown_VTable,
+  using iunknown_vtalbe:   DXGI.IUnknown_VTable,
 
   // Generates a collection of audio endpoint devices that meet the 
   // specified criteria
@@ -68,59 +68,20 @@ vtable_IMMDeviceEnumerator :: struct {
   //Store Endpoint selected by an ID String.
   GetDevice: proc "std" (
     this:        ^IMMDeviceEnumerator,
-    pwstrId,      WIN32.LPCWSTR, // points to a string containing EndpoinT ID
+    pwstrId:      WIN32.LPCWSTR, // points to a string containing EndpoinT ID
     ppDevice:   ^^IMMDevice      // Where the endpoint gets stored
   ) -> WIN32.HRESULT,
 
   // Creates notification callback interface
-  RegisterEndpointNotificationCallback proc "std" ( 
+  RegisterEndpointNotificationCallback: proc "std" ( 
     this:        ^IMMDeviceEnumerator,
     pClient: ^IMMNotificationClient //Client registers for notification callback
   ) -> WIN32.HRESULT ,
 
   // Deletes notification callback interface
-  UnregisterEndpointNotificationCallback proc "std" (
+  UnregisterEndpointNotificationCallback: proc "std" (
     pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT, 
-
-}
-
-
-IMMNotificationClient :: struct {
-  #subtype iunknown: DXGI.IUnknown
-  using vtable: ^vtable_IMMNotificationClient
-  //VTable 
-}
-
-vtable_IMMNotificationClient  :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable,
-
-  // Notifies client that default Endpoint device for a device role has changed.
-  OnDefaultDeviceChanged: proc "std" (
-    this:          ^IMMNotificationClient
-    dataFlow:       EDataFlow, // Flow Direction (See EDataFlow in ENUM)
-    role:           ERole,      // Role of device (See ERole in ENUM)
-    ppEndpoint:   ^^IMMDevice  // Where the endpoint gets stored
-  ) -> WIN32.HRESULT,
-
-  //Store Endpoint selected by an ID String.
-  GetDevice: proc "std" (
-    this:          ^IMMNotificationClient
-    pwstrId,      WIN32.LPCWSTR, // points to a string containing EndpoinT ID
-    ppDevice:   ^^IMMDevice      // Where the endpoint gets stored
-  ) -> WIN32.HRESULT,
-
-  // Creates notification callback interface
-  RegisterEndpointNotificationCallback proc "std" ( 
-    this:          ^IMMNotificationClient
-    pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT,
-
-  // Deletes notification callback interface
-  UnregisterEndpointNotificationCallback proc "std" (
-    pClient: ^IMMNotificationClient //Client registers for notification callback
-  ) -> WIN32.HRESULT,
-
+  ) -> WIN32.HRESULT 
 }
 
 IMMDevice  :: struct {
@@ -130,7 +91,7 @@ IMMDevice  :: struct {
 }
 
 vtable_IMMDevice   :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable,
+  using iunknown_vtable:   DXGI.IUnknown_VTable,
 
   // Creates a COM object with the specified interface
   Activate: proc "std" (
@@ -169,7 +130,7 @@ IMMDeviceCollection :: struct {
 }
 
 vtable_IMMDeviceCollection :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable,
+  using iunknown_vtable:   DXGI.IUnknown_VTable,
 
   //Retrieveces a count of the devices in the device collection
   GetCount : proc "std" (
@@ -192,7 +153,7 @@ IPropertyStore :: struct {
 }
 
 vtable_IPropertyStore  :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable,
+  using iunknown_vtable:   DXGI.IUnknown_VTable,
 
   // Gets the number of peoperties attached to the file
   GetCount : proc "std" (
@@ -204,7 +165,7 @@ vtable_IPropertyStore  :: struct {
   GetAt : proc "std" (
     this:   ^IPropertyStore
     iProp :  WIN32.DWORD, // index into array of PROPERTYKEY structs  
-    pkey:   ^PROPERTYKEY, // TBB (Litterally what is says in the docs lol)
+    pkey:   ^PROPERTYKEY, // TDB (Litterally what is says in the docs lol)
   ) -> WIN32.HRESULT,
 
   // Gets data for a specific property
@@ -234,7 +195,7 @@ IMMNotificationClient :: struct {
 }
 
 vtable_IMMNotificationClient  :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable
+  using iunknown_vtable:   DXGI.IUnknown_VTable
 
   // Notifies client that default Endpoint device for a device role has changed.
   OnDefaultDeviceChanged: proc "std" (
@@ -264,7 +225,7 @@ vtable_IMMNotificationClient  :: struct {
   ) -> WIN32.HRESULT
 
   // Indicated a property has changed for an Endpoint Device
-  OnPropertValueChanged: proc "std" (
+  OnPropertyValueChanged: proc "std" (
     this:         ^IMMNotificationClient
     pwstrDeviceId: WIN32.LPCWSTR // Endpoint identifier string
     key:           PROPERTYKEY   // Specifires property GUID and index
@@ -278,7 +239,7 @@ IAudioClient :: struct {
 }
 
 vtable_IAudioClient :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable,
+  using iunknown_vtable:   DXGI.IUnknown_VTable,
 
   //Initializes audio stream
   Initialize: proc "std" (
@@ -346,7 +307,7 @@ vtable_IAudioClient :: struct {
   // accesses additional services from audio client
   GetService: proc "std" (
     this: ^IAudioClient,
-    riid: REFIID // Interface ID for requested service
+    riid: WIN32.REFIID // Interface ID for requested service
     ppv: ^^rawptr // writes address of an instance of request interface.
   ) -> WIN32.HRESULT
 
@@ -363,7 +324,7 @@ vtable_IAudioClient2 :: struct {
 
   IsOffloadCapable: proc "std" (
     this:             ^IAudioClient2,
-    Category:          AUDIO_STEAM_CATEGORY, // SEE ENUM
+    Category:          AUDIO_STREAM_CATEGORY, // SEE ENUM
     pbOffloadCapable: ^WIN32.BOOL            // Writes TRUE if offload-capable
   ) -> WIN32.HRESULT,
 
@@ -432,7 +393,7 @@ IAudioRenderClient :: struct {
 }
 
 vtable_IAudioRenderClient  :: struct {
-  using iunknown_vtable:   dxgi.IUnknown_VTable,
+  using iunknown_vtable:   DXGI.IUnknown_VTable,
 
   GetBuffer: proc "std" (
     this:              ^IAudioRenderClient
@@ -449,16 +410,16 @@ vtable_IAudioRenderClient  :: struct {
 // ************* TYPES/STRUCTS ********************
 PROPVARIANT    ::  distinct rawptr //TODO(Carbon) Should I fully implement this?
 REFERENCE_TIME :: i64
-REFPEOPERTYKEY :: WIN32.DWORD
+REFPROPERTYKEY :: WIN32.DWORD
 
 // ************* STRUCTS ********************
 
-PROPERTYKEY : struct {
+PROPERTYKEY :: struct {
   fmtid: DXGI.GUID
   pid:   WIN32.DWORD
 }
 
-AudioClientProperties : struct {
+AudioClientProperties :: struct {
   cbSize:     WIN32.UINT32
   bIsOffload: WIN32.BOOL
   eCategory:  AUDIO_STREAM_CATEGORY
@@ -466,7 +427,7 @@ AudioClientProperties : struct {
 
 }
 
-WAVEFORMATEX {
+WAVEFORMATEX :: struct {
   wFormatTag:      WIN32.WORD
   nChannels:       WIN32.WORD
   nSamplesPerSec:  WIN32.DWORD
@@ -478,7 +439,7 @@ WAVEFORMATEX {
 
 // ************* ENUMS *******************
 
-  EDataFlow : enum i32 {
+  EDataFlow :: enum i32 {
   eRender = 0, // Rendering stream. Data flows from APP -> DEVICE.
   eCapture,    // Capture Stream. Data flows from DEVICE -> APP
   eAll,        // capture or render. Data flows both directions DEVICE <--> APP
@@ -490,7 +451,7 @@ WAVEFORMATEX {
 *  IMMNotificationClient: OnDefaultDeviceChanged
 */
 
-ERole : enum i32 {
+ERole :: enum i32 {
   eConsole = 0,    // Games, System Notifactions sounds, and voice commands. 
   eMultimedia,     // Music, Movies, narration, live music recording 
   eCommunications, // Voice Communication (talking to another person)
@@ -501,7 +462,7 @@ ERole : enum i32 {
 *  IMMNotificationClient: OnDefaultDeviceChanged
 */
 
-AUDIO_STREAM_CATEGORY : enum i32 (
+AUDIO_STREAM_CATEGORY :: enum i32 {
   AudioCategory_Other,
   AudioCategory_ForegroundOnlyMedia,
   AudioCategory_BackgroundCapableMedia,
@@ -519,19 +480,19 @@ AUDIO_STREAM_CATEGORY : enum i32 (
   AudioCategory_VoiceTyping
 }
 
-AUDCLNT_STREAMOPTIONS : enum i32 {
+AUDCLNT_STREAMOPTIONS :: enum i32 {
   AUDCLNT_STREAMOPTIONS_NONE,
   AUDCLNT_STREAMOPTIONS_RAW,
   AUDCLNT_STREAMOPTIONS_MATCH_FORMAT,
   AUDCLNT_STREAMOPTIONS_AMBISONICS
 }
 
-AUDCLNT_SHAREMODE : enum i32 {
+AUDCLNT_SHAREMODE :: enum i32 {
   AUDCLNT_SHAREMODE_SHARED,
   AUDCLNT_SHAREMODE_EXCLUSIVE
 }
 
-AUDCLNT_BUFFERFLAGS : enum i32 {
+AUDCLNT_BUFFERFLAGS :: enum i32 {
   AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY,
   AUDCLNT_BUFFERFLAGS_SILENT,
   AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR
@@ -603,24 +564,24 @@ AUDCLNT_SESSIONFLAGS_DISPLAY_HIDEWHENEXPIRED :: 0x40000000
 // Below was supplied by fendevel as I don't know enough about UUID stuff 
 // Src: https://github.com/fendevel/odin-wasapi/blob/main/wasapi.odin
 
-CLSCTX_ALL :: windows.CLSCTX_INPROC_SERVER | windows.CLSCTX_INPROC_HANDLER | windows.CLSCTX_LOCAL_SERVER | windows.CLSCTX_REMOTE_SERVER
-CLSID_MMDeviceEnumerator := IAudioClient_UUID_STRING :: "1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"
+CLSCTX_ALL :: WIN32.CLSCTX_INPROC_SERVER | WIN32.CLSCTX_INPROC_HANDLER | WIN32.CLSCTX_LOCAL_SERVER | WIN32.CLSCTX_REMOTE_SERVER
+CLSID_MMDeviceEnumerator := WIN32.GUID{0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}}
 
 IMMDevice_UUID_STRING :: "D666063F-1587-4E43-81F1-B948E807363F"
-IMMDevice_UUID := &dxgi.IID{0xD666063F, 0x1587, 0x4E43, {0x81, 0xF1, 0xB9, 0x48, 0xE8, 0x07, 0x36, 0x3F}}
+IMMDevice_UUID := &DXGI.IID{0xD666063F, 0x1587, 0x4E43, {0x81, 0xF1, 0xB9, 0x48, 0xE8, 0x07, 0x36, 0x3F}}
 
 IMMDeviceCollection_UUID_STRING :: "0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"
-IMMDeviceCollection_UUID := &dxgi.IID{0x0BD7A1BE, 0x7A1A, 0x44DB, {0x83, 0x97, 0xCC, 0x53, 0x92, 0x38, 0x7B, 0x5E}}
+IMMDeviceCollection_UUID := &DXGI.IID{0x0BD7A1BE, 0x7A1A, 0x44DB, {0x83, 0x97, 0xCC, 0x53, 0x92, 0x38, 0x7B, 0x5E}}
 
 IAudioClient_UUID_STRING :: "1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"
-IAudioClient_UUID := &dxgi.IID{0x1CB9AD4C, 0xDBFA, 0x4c32, {0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2}}windows.GUID{0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}}
+IAudioClient_UUID := &DXGI.IID{0x1CB9AD4C, 0xDBFA, 0x4c32, {0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2}}
 
 IAudioClient2_UUID_STRING :: "726778CD-F60A-4eda-82DE-E47610CD78AA"
-IAudioClient2_UUID := &dxgi.IID{0x726778CD, 0xF60A, 0x4eda, {0x82, 0xDE, 0xE4, 0x76, 0x10, 0xCD, 0x78, 0xAA}}
+IAudioClient2_UUID := &DXGI.IID{0x726778CD, 0xF60A, 0x4eda, {0x82, 0xDE, 0xE4, 0x76, 0x10, 0xCD, 0x78, 0xAA}}
 
 IAudioClient3_UUID_STRING :: "7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42"
-IAudioClient3_UUID := &dxgi.IID{0x7ED4EE07, 0x8E67, 0x4CD4, {0x8C, 0x1A, 0x2B, 0x7A, 0x59, 0x87, 0xAD, 0x42}}
+IAudioClient3_UUID := &DXGI.IID{0x7ED4EE07, 0x8E67, 0x4CD4, {0x8C, 0x1A, 0x2B, 0x7A, 0x59, 0x87, 0xAD, 0x42}}
 
 IAudioRenderClient_UUID_STRING :: "F294ACFC-3146-4483-A7BF-ADDCA7C260E2"
-IAudioRenderClient_UUID := &dxgi.IID{0xF294ACFC, 0x3146, 0x4483, {0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2}}
+IAudioRenderClient_UUID := &DXGI.IID{0xF294ACFC, 0x3146, 0x4483, {0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2}}
 
