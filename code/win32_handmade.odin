@@ -21,8 +21,10 @@ foreign gdi32 {
 running            : bool
 globalBuffer       : w_offscreen_buffer
 globalAudio        : w_audio
+globalControls     : controls
 
 S_OK :: WIN32.HRESULT(0)
+DEFAULT_VOLUME  :: 1400
 TONE_WAVELENGTH :: 440
 
 
@@ -45,7 +47,16 @@ w_audio :: struct {
   bufferSizeFrames: u32
 }
 
+controls :: struct {
+  close : u32
+}
+
+
 main :: proc() {
+
+  //Rebinding Controls test
+    globalControls.close = WIN32.VK_ESCAPE
+  //Controls Test end
 
   instance := cast(WIN32.HINSTANCE)WIN32.GetModuleHandleA(nil)
 
@@ -236,7 +247,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
           case WIN32.VK_LEFT:
           case WIN32.VK_DOWN:
           case WIN32.VK_RIGHT:
-          case WIN32.VK_ESCAPE:
+          case globalControls.close:
             running = false
           case WIN32.VK_SPACE:
           case WIN32.VK_F4:
@@ -422,13 +433,18 @@ wPlayAudio :: proc (audio: ^w_audio) {
     if (hr == S_OK) {
 
       for frameIndex := 0; frameIndex < int(nFramesToWrite); frameIndex += 1 {
-      amp := 300 * MATH.sin(audio.playbackTime)
-      buffer^ = i16(amp)
-      buffer = MEM.ptr_offset(buffer, 1)
-      buffer^ = i16(amp)
-      buffer = MEM.ptr_offset(buffer, 1)
-      audio.playbackTime += 6.28 / audio.wavePeriod
-      if audio.playbackTime > 6.28 do audio.playbackTime -= 6.28
+        /*NOTE(Carbon) Sense I'm not using DirectSound like HMH, how should I 
+                       write to the "future".
+                       I could make a seperate ring buffer + read/write ptr then
+                       mem copy? Somethinig to think about.
+        */
+        amp := DEFAULT_VOLUME * MATH.sin(audio.playbackTime)
+        buffer^ = i16(amp) // Left
+        buffer = MEM.ptr_offset(buffer, 1)
+        buffer^ = i16(amp) //Right
+        buffer = MEM.ptr_offset(buffer, 1)
+        audio.playbackTime += 6.28 / audio.wavePeriod
+        if audio.playbackTime > 6.28 do audio.playbackTime -= 6.28
       }
       hr = audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
       if hr != S_OK {
