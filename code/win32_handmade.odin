@@ -156,7 +156,6 @@ main :: proc() {
             }
 
             globalAudio.wavePeriod = f64(controller.gamepad.sThumbRY>>10 * 15 + 511)
-            FMT.println(globalAudio.wavePeriod)
 
             XINPUT.SetState(0, &vibration)
 
@@ -274,6 +273,7 @@ wResizeDIBSection :: proc (bitmap: ^w_offscreen_buffer,
   bytesPerPixel  : i32 = 4 
   bitmapSize     := uint(bytesPerPixel * bitmap.width * bitmap.height)
   bitmap.memory   = cast([^]u32)WIN32.VirtualAlloc(nil, bitmapSize, 
+                                                   WIN32.MEM_RESERVE|
                                                    WIN32.MEM_COMMIT,
                                                    WIN32.PAGE_READWRITE)
 
