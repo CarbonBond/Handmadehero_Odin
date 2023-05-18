@@ -90,12 +90,11 @@ main :: proc() {
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
-      defer WIN32.CoUninitialize()
       
       running = true 
       for running {
 
-        if audioSuccess do playAudio(&globalAudio) 
+        if audioSuccess do wPlayAudio(&globalAudio) 
 
         message: WIN32.MSG
         for WIN32.PeekMessageW(&message, nil, 0, 0, WIN32.PM_REMOVE) {
@@ -155,6 +154,9 @@ main :: proc() {
               controller.gamepad.sThumbLY < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
               blueOffset -= i32(controller.gamepad.sThumbLY >> 12)
             }
+
+            globalAudio.wavePeriod = f64(controller.gamepad.sThumbRY>>10 * 15 + 511)
+            FMT.println(globalAudio.wavePeriod)
 
             XINPUT.SetState(0, &vibration)
 
@@ -251,7 +253,7 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
   return result
 }
 
-wResizeDIBSection :: proc "std" (bitmap: ^w_offscreen_buffer, 
+wResizeDIBSection :: proc (bitmap: ^w_offscreen_buffer, 
                                          width, height: i32) {
 
   if bitmap.memory != nil {
@@ -303,7 +305,7 @@ wDisplayBufferInWindow :: proc "std" (deviceContext: WIN32.HDC,
 
 }
 
-wRenderWeirdGradiant :: proc "std" (bitmap: ^w_offscreen_buffer,
+wRenderWeirdGradiant :: proc  (bitmap: ^w_offscreen_buffer,
                                             greenOffset, blueOffset, redOffset: i32) {
 
   bitmapMemoryArray := bitmap.memory[:]
@@ -334,7 +336,7 @@ wWindowDemensions :: proc "std" (window : WIN32.HWND) -> (width, height: i32) {
 }
 
 
-wInitAudio :: proc(audio: ^w_audio) -> bool {
+wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 41000) -> bool {
 
       hr := WIN32.CoInitializeEx(nil, WIN32.COINIT.SPEED_OVER_MEMORY)
 
@@ -365,12 +367,12 @@ wInitAudio :: proc(audio: ^w_audio) -> bool {
       audioDevice->Release()
 
       mix_format: WASAPI.WAVEFORMATEX = {
-        wFormatTag      = 1, // WAVE_FORMAT_PCM
-        nChannels       = 2,
-        nSamplesPerSec  = 44100,
+        wFormatTag      = 1, // WAVE_FORMAT_PCM, as we only need two channel
+        nChannels       = 2,  
+        nSamplesPerSec  = samplesPerSec,
         wBitsPerSample  = 16,
-        nBlockAlign     = 2 * 16 / 8, // nChannel * wBitsPerSample / 8
-        nAvgBytesPerSec = 44100 * 2 * 16 / 8, //nSamplesPerSec * nBlockAlign
+        nBlockAlign     = 2 * 16 / 8, // nChannel * wBitsPerSample / 8 bits
+        nAvgBytesPerSec = samplesPerSec * 2 * 16 / 8, //nSamplesPerSec * nBlockAlign
       }
 
       init_stream_flags : u32 = WASAPI.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
@@ -391,7 +393,7 @@ wInitAudio :: proc(audio: ^w_audio) -> bool {
                                    cast(^rawptr)&audio.renderClient)
 
       audio.playbackTime = 1
-      audio.wavePeriod = f64(44100. / TONE_WAVELENGTH)
+      audio.wavePeriod = f64(samplesPerSec / TONE_WAVELENGTH)
       audio.client->GetDevicePeriod(&audio.defaultPeriod, &audio.minPeriod)
       audio.framesPerPeriod = int(44100 * 
                               (f64(audio.defaultPeriod) / (10000.0 * 1000.0)) + 0.5) 
@@ -403,29 +405,40 @@ wInitAudio :: proc(audio: ^w_audio) -> bool {
       return true
 }
 
-playAudio :: proc (audio: ^w_audio) {
-        // AUDIO  TESTING
-        bufferPadding: u32
-        hr := audio.client->GetCurrentPadding(&bufferPadding)
-        assert(hr == S_OK)
-        latency := audio.bufferSizeFrames / 72
-        nFramesToWrite := latency - bufferPadding
-        if nFramesToWrite <= 0 do return
+wPlayAudio :: proc (audio: ^w_audio) {
+   
+  bufferPadding: u32
+  hr := audio.client->GetCurrentPadding(&bufferPadding)
 
-        buffer: ^i16
-        hr = audio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
-        assert(hr == S_OK)
+  if hr == S_OK {
 
-        for frameIndex := 0; frameIndex < int(nFramesToWrite); frameIndex += 1 {
-          amp := 300 * MATH.sin(audio.playbackTime)
-          buffer^ = i16(amp)
-          buffer = MEM.ptr_offset(buffer, 1)
-          buffer^ = i16(amp)
-          buffer = MEM.ptr_offset(buffer, 1)
-          audio.playbackTime += 6.28 / audio.wavePeriod
-          if audio.playbackTime > 6.28 do audio.playbackTime -= 6.28
-        }
-        hr = audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
-        assert(hr == S_OK)
-        //AUDIO TESTING END
+    latency := audio.bufferSizeFrames / 72
+    nFramesToWrite := latency - bufferPadding
+    if nFramesToWrite <= 0 do return
+
+    buffer: ^i16
+    hr = audio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
+
+    if (hr == S_OK) {
+
+      for frameIndex := 0; frameIndex < int(nFramesToWrite); frameIndex += 1 {
+      amp := 300 * MATH.sin(audio.playbackTime)
+      buffer^ = i16(amp)
+      buffer = MEM.ptr_offset(buffer, 1)
+      buffer^ = i16(amp)
+      buffer = MEM.ptr_offset(buffer, 1)
+      audio.playbackTime += 6.28 / audio.wavePeriod
+      if audio.playbackTime > 6.28 do audio.playbackTime -= 6.28
+      }
+      hr = audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
+      if hr != S_OK {
+        //TODO(Carbon): Diagnostic for ReleaseBuffer
+      }
+    } else {
+      //TODO(Carbon): Diagnostic for GetBuffer
+    }
+
+  } else {
+    //TODO(Carbon): Diagnostic for GetCurrentPadding
+  }
 }

@@ -427,13 +427,13 @@ AudioClientProperties :: struct {
 }
 
 WAVEFORMATEX :: struct {
-  wFormatTag:      WIN32.WORD
-  nChannels:       WIN32.WORD
-  nSamplesPerSec:  WIN32.DWORD
-  nAvgBytesPerSec: WIN32.DWORD
-  nBlockAlign:     WIN32.WORD
-  wBitsPerSample:  WIN32.WORD
-  cbSize:          WIN32.WORD
+  wFormatTag:      WIN32.WORD  // waveform audio format type
+  nChannels:       WIN32.WORD  // Channels in audio data. Stereo is 2
+  nSamplesPerSec:  WIN32.DWORD // Sample rate in hz 
+  nAvgBytesPerSec: WIN32.DWORD // Data transfer rate
+  nBlockAlign:     WIN32.WORD  // min atomic unit of data for formate type
+  wBitsPerSample:  WIN32.WORD  // bits per sample for format type
+  cbSize:          WIN32.WORD  // size of extra formate information appended
 }
 
 // ************* ENUMS *******************
