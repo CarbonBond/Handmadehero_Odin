@@ -159,14 +159,14 @@ main :: proc() {
 
             if controller.gamepad.sThumbLX > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
               controller.gamepad.sThumbLX < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
-              greenOffset += i32(controller.gamepad.sThumbLX >> 12 )
+              greenOffset += i32(controller.gamepad.sThumbLX / 10000 )
             }
             if controller.gamepad.sThumbLY > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
               controller.gamepad.sThumbLY < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
-              blueOffset -= i32(controller.gamepad.sThumbLY >> 12)
+              blueOffset -= i32(controller.gamepad.sThumbLY / 10000)
             }
 
-            globalAudio.wavePeriod = f64(controller.gamepad.sThumbRY>>10 * 15 + 511)
+            globalAudio.wavePeriod = f64(controller.gamepad.sThumbRY / 80 + 511)
 
             XINPUT.SetState(0, &vibration)
 
