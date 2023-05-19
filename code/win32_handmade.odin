@@ -1,10 +1,11 @@
 package main
 
-import FMT     "core:fmt"
-import UTF16   "core:unicode/utf16"
-import WIN32   "core:sys/windows"
-import MATH    "core:math"
-import MEM     "core:mem"
+import FMT        "core:fmt"
+import UTF16      "core:unicode/utf16"
+import WIN32      "core:sys/windows"
+import MATH       "core:math"
+import MEM        "core:mem"
+import INTRINSICS "core:intrinsics"
 
 import XINPUT  "xinput" 
 import WASAPI  "audio/wasapi"
@@ -74,6 +75,7 @@ main :: proc() {
   UTF16.encode_string(name_u16[:], name)
   windowClass.lpszClassName = &name_u16[0]
 
+
   if WIN32.RegisterClassW(&windowClass) != 0 {
     window: WIN32.HWND = WIN32.CreateWindowExW(
       0,
@@ -101,11 +103,17 @@ main :: proc() {
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
+
+      prevCounter : WIN32.LARGE_INTEGER
+      WIN32.QueryPerformanceCounter(&prevCounter)
       
+      perfCountFrequency : WIN32.LARGE_INTEGER
+      WIN32.QueryPerformanceFrequency(&perfCountFrequency)
+
+      prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
+       
       running = true 
       for running {
-
-        if audioSuccess do wPlayAudio(&globalAudio) 
 
         message: WIN32.MSG
         for WIN32.PeekMessageW(&message, nil, 0, 0, WIN32.PM_REMOVE) {
@@ -178,11 +186,27 @@ main :: proc() {
         }
 
         wRenderWeirdGradiant(&globalBuffer, greenOffset, blueOffset, redOffset)
+        if audioSuccess do wPlayAudio(&globalAudio) 
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
         WIN32.ReleaseDC(window, deviceContext)
 
+
+        endCyclesCount : i64 = INTRINSICS.read_cycle_counter()
+
+        endCounter : WIN32.LARGE_INTEGER 
+        WIN32.QueryPerformanceCounter(&endCounter)
+        
+        counterElapsed:= u64(endCounter - prevCounter) //NOTE Keep at end
+        milliSecondsPerFrame := (counterElapsed * 1000) / u64(perfCountFrequency)
+        FMT.print("FPS: ", 1000/milliSecondsPerFrame, " | Miliseconds: ", milliSecondsPerFrame )
+
+        cyclesElapsed := endCyclesCount - prevCyclesCount
+        FMT.println(" | MegaCycles:", f64(cyclesElapsed) / (1000000))
+
+        prevCounter = endCounter
+        prevCyclesCount = endCyclesCount
       }
     } else {
       H.MessageBox("Create Window Fail!", "Handmade Hero")
