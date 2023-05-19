@@ -1,5 +1,6 @@
 package main
 
+import MATH       "core:math"
 import FMT        "core:fmt"
 import UTF16      "core:unicode/utf16"
 import WIN32      "core:sys/windows"
@@ -43,6 +44,7 @@ running            : bool
 globalBuffer       : w_offscreen_buffer
 globalAudio        : w_audio
 globalControls     : controls
+toneHz : u32
 
 S_OK :: WIN32.HRESULT(0)
 
@@ -115,7 +117,7 @@ main :: proc() {
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
-      samples: [^]i16 = cast([^]i16) WIN32.VirtualAlloc(
+      samples := cast(^i16) WIN32.VirtualAlloc(
          nil,
          uint(globalAudio.bufferSizeFrames) * uint(globalAudio.bytesPerSample) * 2 ,
          WIN32.MEM_RESERVE | WIN32.MEM_COMMIT,
@@ -190,6 +192,8 @@ main :: proc() {
               blueOffset -= i32(controller.gamepad.sThumbLY / 10000)
             }
 
+            toneHz = u32(controller.gamepad.sThumbRY / 100 + 450)
+
             vibration : XINPUT.VIBRATION 
 
             if buttonB do vibration.wRightMotorSpeed = 60000
@@ -211,45 +215,29 @@ main :: proc() {
         colorBuffer.height = globalBuffer.height
         colorBuffer.pitch  = globalBuffer.pitch
 
+
+        bufferPadding: u32
+        globalAudio.client->GetCurrentPadding(&bufferPadding)
+        //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
+
+        nFramesToWrite := ((globalAudio.bufferSizeFrames / 72 ) - bufferPadding)
+
         soundBuffer : GAME.sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
+        soundBuffer.sampleCount = u32(nFramesToWrite)
 
-        bufferPadding: u32
-        hr := globalAudio.client->GetCurrentPadding(&bufferPadding)
-
-        if hr == S_OK {
-
-          samples := soundBuffer.samples[:]
-          nFramesToWrite := ((globalAudio.bufferSizeFrames / 72 )- bufferPadding)
-
-          buffer: ^i16
-          hr = globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
-
-          soundBuffer.sampleCount = u32(nFramesToWrite)
-
-          if (hr == S_OK) {
-
-            MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite) * 4)
-
-            hr = globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
-            if hr != S_OK {
-              //TODO(Carbon): Diagnostic for ReleaseBuffer
-            }
-          } else {
-            //TODO(Carbon): Diagnostic for GetBuffer
-          }
-
-        } else {
-          //TODO(Carbon): Diagnostic for GetCurrentPadding
+        buffer: ^i16
+        globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
+        if nFramesToWrite > 0 {
+          MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite * 4))
         }
 
+        globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
 
 
 
-        GAME.UpdateAndRender(&colorBuffer, &soundBuffer, redOffset, greenOffset, blueOffset)
-
-        wPlayAudio(&globalAudio, &soundBuffer) //NOTE(Carbon) not checking for success atm.
+        GAME.UpdateAndRender(&colorBuffer, &soundBuffer, redOffset, greenOffset, blueOffset, toneHz)
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
@@ -474,10 +462,4 @@ wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 41000) -> bool {
       hr = audio.client->Start()
       return true
 }
-
-wPlayAudio :: proc (audio: ^w_audio, soundBuffer: ^GAME.sound_output_buffer) {
-  //TODO(Carbon) Figure out how to use WASAPI with a buffer rather than 
-  //             writing when you call wPlayAudio
-
    
-}
