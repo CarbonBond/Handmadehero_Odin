@@ -1,5 +1,10 @@
 package game
 
+import MATH       "core:math"
+
+playbackTime : f64 = 1
+/*
+*/
 
 offscreen_buffer :: struct {
         memory        : [^]u32
@@ -8,9 +13,17 @@ offscreen_buffer :: struct {
         pitch         : i32
 }
 
+sound_output_buffer :: struct {
+  samples : [^]i16
+  samplesPerSecond: u32
+  sampleCount: u32
+}
+
+
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
-UpdateAndRender :: proc(colorBuffer : ^offscreen_buffer, redOffset, greenOffset, blueOffset: i32 ) {
+UpdateAndRender :: proc(colorBuffer : ^offscreen_buffer, soundBuffer:^sound_output_buffer,
+                        redOffset, greenOffset, blueOffset: i32 ) {
 
   /*
   blueOffset  : i32 = 0
@@ -20,6 +33,25 @@ UpdateAndRender :: proc(colorBuffer : ^offscreen_buffer, redOffset, greenOffset,
 
   renderWeirdGradiant(colorBuffer, greenOffset, blueOffset, redOffset)
 
+  //TODO(Carbon) Allow sample offsets
+  outputSound(soundBuffer)
+}
+
+outputSound :: proc(soundBuffer: ^sound_output_buffer) {
+  //Figure out how to do this with WASAPI
+  toneVolume : u16 = 2000
+  ToneHz     : u32 = 450
+  wavePeriod := soundBuffer.samplesPerSecond/ToneHz
+  samples    := soundBuffer.samples[:]
+
+  for frameIndex := 0; frameIndex < int(soundBuffer.sampleCount); frameIndex += 1 {
+    amp := f64(toneVolume) * MATH.sin(playbackTime)
+    samples[frameIndex] = i16(amp)
+    frameIndex += 1
+    samples[frameIndex] = i16(amp)
+    playbackTime += 6.28 / f64(soundBuffer.samplesPerSecond / ToneHz)
+    if playbackTime > 6.28 do playbackTime -= 6.28
+  }
 }
 
 renderWeirdGradiant :: proc  (bitmap: ^offscreen_buffer,

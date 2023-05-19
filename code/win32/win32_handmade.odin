@@ -3,7 +3,6 @@ package main
 import FMT        "core:fmt"
 import UTF16      "core:unicode/utf16"
 import WIN32      "core:sys/windows"
-import MATH       "core:math"
 import MEM        "core:mem"
 import INTRINSICS "core:intrinsics"
 
@@ -46,18 +45,14 @@ globalAudio        : w_audio
 globalControls     : controls
 
 S_OK :: WIN32.HRESULT(0)
-DEFAULT_VOLUME  :: 1400
-TONE_WAVELENGTH :: 440
 
 
 w_audio :: struct {
   client: ^WASAPI.IAudioClient2
   renderClient: ^WASAPI.IAudioRenderClient
-  playbackTime: f64 
-  wavePeriod :  f64
-  defaultPeriod: WASAPI.REFERENCE_TIME
-  minPeriod: WASAPI.REFERENCE_TIME
-  framesPerPeriod: int
+  safetyBytes: int
+  samplesPerSecond: u32
+  bytesPerSample: int
   bufferSizeFrames: u32
 }
 
@@ -120,6 +115,12 @@ main :: proc() {
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
+      samples: [^]i16 = cast([^]i16) WIN32.VirtualAlloc(
+         nil,
+         uint(globalAudio.bufferSizeFrames) * uint(globalAudio.bytesPerSample) * 2 ,
+         WIN32.MEM_RESERVE | WIN32.MEM_COMMIT,
+         WIN32.PAGE_READWRITE,
+      )
 
       prevCounter : WIN32.LARGE_INTEGER
       WIN32.QueryPerformanceCounter(&prevCounter)
@@ -130,7 +131,7 @@ main :: proc() {
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
       redOffset, greenOffset, blueOffset: i32
-       
+
       running = true 
       for running {
 
@@ -194,8 +195,6 @@ main :: proc() {
             if buttonB do vibration.wRightMotorSpeed = 60000
             if buttonX do vibration.wLeftMotorSpeed = 60000
 
-            globalAudio.wavePeriod = f64(controller.gamepad.sThumbRY / 80 + 511)
-
             XINPUT.SetState(0, &vibration)
 
           } else {
@@ -206,20 +205,55 @@ main :: proc() {
         }
 
         
-        colorBuffer : GAME.offscreen_buffer = {}
+        colorBuffer : GAME.offscreen_buffer
         colorBuffer.memory = globalBuffer.memory
         colorBuffer.width  = globalBuffer.width
         colorBuffer.height = globalBuffer.height
         colorBuffer.pitch  = globalBuffer.pitch
 
-        GAME.UpdateAndRender(&colorBuffer, redOffset, greenOffset, blueOffset)
+        soundBuffer : GAME.sound_output_buffer
+        soundBuffer.samples = samples // Allocated before after init
+        soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
 
-        wPlayAudio(&globalAudio) //NOTE(Carbon) not checking for success atm.
+        bufferPadding: u32
+        hr := globalAudio.client->GetCurrentPadding(&bufferPadding)
+
+        if hr == S_OK {
+
+          samples := soundBuffer.samples[:]
+          nFramesToWrite := ((globalAudio.bufferSizeFrames / 72 )- bufferPadding)
+
+          buffer: ^i16
+          hr = globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
+
+          soundBuffer.sampleCount = u32(nFramesToWrite)
+
+          if (hr == S_OK) {
+
+            MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite) * 4)
+
+            hr = globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
+            if hr != S_OK {
+              //TODO(Carbon): Diagnostic for ReleaseBuffer
+            }
+          } else {
+            //TODO(Carbon): Diagnostic for GetBuffer
+          }
+
+        } else {
+          //TODO(Carbon): Diagnostic for GetCurrentPadding
+        }
+
+
+
+
+        GAME.UpdateAndRender(&colorBuffer, &soundBuffer, redOffset, greenOffset, blueOffset)
+
+        wPlayAudio(&globalAudio, &soundBuffer) //NOTE(Carbon) not checking for success atm.
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
         WIN32.ReleaseDC(window, deviceContext)
-
 
         endCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
@@ -430,58 +464,20 @@ wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 41000) -> bool {
       hr = audio.client->GetService(WASAPI.IAudioRenderClient_UUID,
                                    cast(^rawptr)&audio.renderClient)
 
-      audio.playbackTime = 1
-      audio.wavePeriod = f64(samplesPerSec / TONE_WAVELENGTH)
-      audio.client->GetDevicePeriod(&audio.defaultPeriod, &audio.minPeriod)
-      audio.framesPerPeriod = int(44100 * 
-                              (f64(audio.defaultPeriod) / (10000.0 * 1000.0)) + 0.5) 
+      audio.samplesPerSecond = samplesPerSec 
+      audio.bytesPerSample   = 16
+      defaultPeriod: WASAPI.REFERENCE_TIME
+      minPeriod: WASAPI.REFERENCE_TIME
+      audio.client->GetDevicePeriod(&defaultPeriod, &minPeriod)
 
       hr = audio.client->GetBufferSize(&audio.bufferSizeFrames)
       hr = audio.client->Start()
-
-
       return true
 }
 
-wPlayAudio :: proc (audio: ^w_audio) {
+wPlayAudio :: proc (audio: ^w_audio, soundBuffer: ^GAME.sound_output_buffer) {
+  //TODO(Carbon) Figure out how to use WASAPI with a buffer rather than 
+  //             writing when you call wPlayAudio
+
    
-  bufferPadding: u32
-  hr := audio.client->GetCurrentPadding(&bufferPadding)
-
-  if hr == S_OK {
-
-    latency := audio.bufferSizeFrames / 72
-    nFramesToWrite := latency - bufferPadding
-    if nFramesToWrite <= 0 do return
-
-    buffer: ^i16
-    hr = audio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
-
-    if (hr == S_OK) {
-
-      for frameIndex := 0; frameIndex < int(nFramesToWrite); frameIndex += 1 {
-        /*NOTE(Carbon) Sense I'm not using DirectSound like HMH, how should I 
-                       write to the "future".
-                       I could make a seperate ring buffer + read/write ptr then
-                       mem copy? Somethinig to think about.
-        */
-        amp := DEFAULT_VOLUME * MATH.sin(audio.playbackTime)
-        buffer^ = i16(amp) // Left
-        buffer = MEM.ptr_offset(buffer, 1)
-        buffer^ = i16(amp) //Right
-        buffer = MEM.ptr_offset(buffer, 1)
-        audio.playbackTime += 6.28 / audio.wavePeriod
-        if audio.playbackTime > 6.28 do audio.playbackTime -= 6.28
-      }
-      hr = audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
-      if hr != S_OK {
-        //TODO(Carbon): Diagnostic for ReleaseBuffer
-      }
-    } else {
-      //TODO(Carbon): Diagnostic for GetBuffer
-    }
-
-  } else {
-    //TODO(Carbon): Diagnostic for GetCurrentPadding
-  }
 }
