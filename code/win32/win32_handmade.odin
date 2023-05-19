@@ -7,14 +7,35 @@ import MATH       "core:math"
 import MEM        "core:mem"
 import INTRINSICS "core:intrinsics"
 
-import XINPUT  "xinput" 
-import WASAPI  "audio/wasapi"
-import H       "helper"
+import XINPUT  "../xinput" 
+import WASAPI  "../audio/wasapi"
+import H       "../helper"
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
     CreateCompatibleDC :: proc "stdcall" (hdc : WIN32.HDC) -> WIN32.HDC ---
 }
+
+import GAME "../game" //Actual game
+
+/*TODO(Carbon) Missing Functionality
+  
+  - Saved game locations
+  - Getting a handle to out own executable
+  - Asset loading 
+  - Threading: Handle multiple threads
+  - Raw input: Handle multiple keyboards)
+  - Sleep/timeBegingPeriod: Avoid full cpu spin
+  - ClipCursor(): Multiple monitors
+  - Fullscreen
+  - WM_SETCURSOR: Show cursor
+  - QueryCanvelAutoplay
+  - WM_ACTIVATEAPP: Not the active/focused app
+  - Blit speed improvements
+  - Hardware acceleration (OpenGL, Direct3D, Vulkin?)
+  - GetKeyboardLayout: For international WASD
+
+*/
 
 
 // TODO(Carbon) Change from global
@@ -29,14 +50,6 @@ DEFAULT_VOLUME  :: 1400
 TONE_WAVELENGTH :: 440
 
 
-w_offscreen_buffer :: struct {
-        memory        : [^]u32
-        info          : WIN32.BITMAPINFO 
-        width         : i32
-        height        : i32
-        pitch         : i32
-}
-
 w_audio :: struct {
   client: ^WASAPI.IAudioClient2
   renderClient: ^WASAPI.IAudioRenderClient
@@ -46,6 +59,14 @@ w_audio :: struct {
   minPeriod: WASAPI.REFERENCE_TIME
   framesPerPeriod: int
   bufferSizeFrames: u32
+}
+
+w_offscreen_buffer :: struct {
+        memory     : [^]u32
+        width      : i32
+        height     : i32
+        pitch      : i32
+        info       : WIN32.BITMAPINFO
 }
 
 controls :: struct {
@@ -96,10 +117,6 @@ main :: proc() {
       //             We can use one DC
       deviceContext := WIN32.GetDC(window)
 
-      blueOffset  : i32 = 0
-      greenOffset : i32 = 0
-      redOffset   : i32 = 0
-
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
@@ -111,6 +128,8 @@ main :: proc() {
       WIN32.QueryPerformanceFrequency(&perfCountFrequency)
 
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
+
+      redOffset, greenOffset, blueOffset: i32
        
       running = true 
       for running {
@@ -152,6 +171,7 @@ main :: proc() {
             buttonX         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_X)
             buttonY         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_Y)
 
+            // TODO(Carbon) Move to game code, not platform
             if buttonUp    do blueOffset  += 1
             if buttonDown  do blueOffset  -= 1
             if buttonLeft  do greenOffset += 1
@@ -159,11 +179,6 @@ main :: proc() {
 
             if buttonA     do redOffset   += 1
             if buttonY     do redOffset   -= 1
-
-            vibration : XINPUT.VIBRATION 
-
-            if buttonB do vibration.wRightMotorSpeed = 60000
-            if buttonX do vibration.wLeftMotorSpeed = 60000
 
             if controller.gamepad.sThumbLX > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
               controller.gamepad.sThumbLX < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
@@ -173,6 +188,11 @@ main :: proc() {
               controller.gamepad.sThumbLY < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
               blueOffset -= i32(controller.gamepad.sThumbLY / 10000)
             }
+
+            vibration : XINPUT.VIBRATION 
+
+            if buttonB do vibration.wRightMotorSpeed = 60000
+            if buttonX do vibration.wLeftMotorSpeed = 60000
 
             globalAudio.wavePeriod = f64(controller.gamepad.sThumbRY / 80 + 511)
 
@@ -185,8 +205,16 @@ main :: proc() {
           break
         }
 
-        wRenderWeirdGradiant(&globalBuffer, greenOffset, blueOffset, redOffset)
-        if audioSuccess do wPlayAudio(&globalAudio) 
+        
+        colorBuffer : GAME.offscreen_buffer = {}
+        colorBuffer.memory = globalBuffer.memory
+        colorBuffer.width  = globalBuffer.width
+        colorBuffer.height = globalBuffer.height
+        colorBuffer.pitch  = globalBuffer.pitch
+
+        GAME.UpdateAndRender(&colorBuffer, redOffset, greenOffset, blueOffset)
+
+        wPlayAudio(&globalAudio) //NOTE(Carbon) not checking for success atm.
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
@@ -199,8 +227,8 @@ main :: proc() {
         WIN32.QueryPerformanceCounter(&endCounter)
         
         counterElapsed:= u64(endCounter - prevCounter) //NOTE Keep at end
-        milliSecondsPerFrame := (counterElapsed * 1000) / u64(perfCountFrequency)
-        FMT.print("FPS: ", 1000/milliSecondsPerFrame, " | Miliseconds: ", milliSecondsPerFrame )
+        milliSecondsPerFrame := f64(counterElapsed * 1000) / f64(perfCountFrequency)
+        FMT.print("FPS: ", 1000.0/f64(milliSecondsPerFrame), " | Miliseconds: ", milliSecondsPerFrame )
 
         cyclesElapsed := endCyclesCount - prevCyclesCount
         FMT.println(" | MegaCycles:", f64(cyclesElapsed) / (1000000))
@@ -312,9 +340,6 @@ wResizeDIBSection :: proc (bitmap: ^w_offscreen_buffer,
                                                    WIN32.MEM_COMMIT,
                                                    WIN32.PAGE_READWRITE)
 
-
-  wRenderWeirdGradiant(bitmap, 0, 0, 0)
-
 }
 
 wDisplayBufferInWindow :: proc "std" (deviceContext: WIN32.HDC, 
@@ -338,28 +363,6 @@ wDisplayBufferInWindow :: proc "std" (deviceContext: WIN32.HDC,
     WIN32.SRCCOPY
   )
 
-}
-
-wRenderWeirdGradiant :: proc  (bitmap: ^w_offscreen_buffer,
-                                            greenOffset, blueOffset, redOffset: i32) {
-
-  bitmapMemoryArray := bitmap.memory[:]
-  size := bitmap.pitch * bitmap.height
-  row : i32 = 0
-  for y : i32 = 0; y < bitmap.height; y += 1 {
-    pixel := row
-    for x : i32 = 0; x < bitmap.width; x += 1 {
-      red   : u8 = u8(redOffset)
-      green : u8 = u8(x + greenOffset)
-      blue  : u8 = u8(y + blueOffset)
-      pad   : u8 = u8(0)
-
-      bitmapMemoryArray[pixel] = (u32(pad) << 24) | (u32(red) << 16) |
-                                  (u32(green) << 8) | (u32(blue) << 0)
-      pixel += 1
-    }
-    row += bitmap.pitch
-  }
 }
 
 wWindowDemensions :: proc "std" (window : WIN32.HWND) -> (width, height: i32) {
