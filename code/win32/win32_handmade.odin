@@ -44,10 +44,8 @@ running            : bool
 globalBuffer       : w_offscreen_buffer
 globalAudio        : w_audio
 globalControls     : controls
-toneHz : u32
 
 S_OK :: WIN32.HRESULT(0)
-
 
 w_audio :: struct {
   client: ^WASAPI.IAudioClient2
@@ -59,17 +57,18 @@ w_audio :: struct {
 }
 
 w_offscreen_buffer :: struct {
-        memory     : [^]u32
-        width      : i32
-        height     : i32
-        pitch      : i32
-        info       : WIN32.BITMAPINFO
+  memory: [^]u32
+  width : i32
+  height: i32
+  pitch : i32
+  info  : WIN32.BITMAPINFO
 }
 
+
+//NOTE(Carbon) messing with rebindings
 controls :: struct {
   close : u32
 }
-
 
 main :: proc() {
 
@@ -132,10 +131,13 @@ main :: proc() {
 
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
-      redOffset, greenOffset, blueOffset: i32
+      inputs : [2]GAME.input
+      newInput := &inputs[0]
+      oldInput := &inputs[1]
 
       running = true 
       for running {
+
 
         message: WIN32.MSG
         for WIN32.PeekMessageW(&message, nil, 0, 0, WIN32.PM_REMOVE) {
@@ -150,56 +152,114 @@ main :: proc() {
 
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
-        for i : WIN32.DWORD = 0; i < XINPUT.XUSER_MAX_COUNT; i += 1 { 
+        MaxControllerCount : u32 = XINPUT.XUSER_MAX_COUNT
+        if MaxControllerCount > len(newInput.controllers) { 
+          MaxControllerCount = len(newInput.controllers)
+        }
+        
+        for i : WIN32.DWORD = 0; i < MaxControllerCount; i += 1 { 
 
+          oldController : ^GAME.controller_input = &oldInput.controllers[i]
+          newController : ^GAME.controller_input = &newInput.controllers[i]
+          
           controller: XINPUT.STATE
           err := XINPUT.GetState(i, &controller)
 
           if err == WIN32.ERROR_SUCCESS {
             //NOTE (Carbon): Controller Plugged in
+            pad := &controller.gamepad
+
+            newController.isAnalog = true
+            /* NOT USED
+            //buttonStart     := bool(pad.wButtons & XINPUT.GAMEPAD_START)
+            //buttonBack      := bool(pad.wButtons & XINPUT.GAMEPAD_BACK)
+
+            buttonThumbL    := bool(pad.wButtons & XINPUT.GAMEPAD_LEFT_THUMB)
+            buttonThumbR    := bool(pad.wButtons & XINPUT.GAMEPAD_RIGHT_THUMB)
+
+            buttonShoulderL := bool(pad.wButtons & XINPUT.GAMEPAD_LEFT_SHOULDER)
+            buttonShoulderR := bool(pad.wButtons & XINPUT.GAMEPAD_RIGHT_SHOULDER)
+            */
 
             //The pressed buttons:
-            buttonUp        := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_UP)
-            buttonDown      := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_DOWN)
-            buttonLeft      := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_LEFT)
-            buttonRight     := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_DPAD_RIGHT)
-            buttonStart     := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_START)
-            buttonBack      := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_BACK)
-            buttonThumbL    := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_LEFT_THUMB)
-            buttonThumbR    := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_RIGHT_THUMB)
-            buttonShoulderL := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_LEFT_SHOULDER)
-            buttonShoulderR := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_RIGHT_SHOULDER)
-            buttonA         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_A)
-            buttonB         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_B)
-            buttonX         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_X)
-            buttonY         := bool(controller.gamepad.wButtons & XINPUT.GAMEPAD_Y)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.move_up],
+                                        &newController.buttons[.move_up],
+                                        XINPUT.GAMEPAD_DPAD_UP)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.move_down],
+                                        &newController.buttons[.move_down],
+                                        XINPUT.GAMEPAD_DPAD_DOWN)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.move_left],
+                                        &newController.buttons[.move_left],
+                                        XINPUT.GAMEPAD_DPAD_LEFT)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.move_right],
+                                        &newController.buttons[.move_right],
+                                        XINPUT.GAMEPAD_DPAD_RIGHT)
 
-            // TODO(Carbon) Move to game code, not platform
-            if buttonUp    do blueOffset  += 1
-            if buttonDown  do blueOffset  -= 1
-            if buttonLeft  do greenOffset += 1
-            if buttonRight do greenOffset -= 1
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.action_up],
+                                        &newController.buttons[.action_up],
+                                        XINPUT.GAMEPAD_Y)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.action_down],
+                                        &newController.buttons[.action_down],
+                                        XINPUT.GAMEPAD_A)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.action_left],
+                                        &newController.buttons[.action_left],
+                                        XINPUT.GAMEPAD_X)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.action_right],
+                                        &newController.buttons[.action_right],
+                                        XINPUT.GAMEPAD_B)
 
-            if buttonA     do redOffset   += 1
-            if buttonY     do redOffset   -= 1
+            stickLeftX  : f32
+            stickLeftY  : f32
+            stickRightX : f32
+            stickRightY : f32
 
-            if controller.gamepad.sThumbLX > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
-              controller.gamepad.sThumbLX < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
-              greenOffset += i32(controller.gamepad.sThumbLX / 10000 )
-            }
-            if controller.gamepad.sThumbLY > XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE ||
-              controller.gamepad.sThumbLY < -XINPUT.GAMEPAD_LEFT_THUMB_DEADZONE {
-              blueOffset -= i32(controller.gamepad.sThumbLY / 10000)
-            }
+            if(pad.sThumbLX < 0 ) { stickLeftX = f32(pad.sThumbLX) / 32768 }
+            else { stickLeftX = f32(pad.sThumbLX) / 32767 }
 
-            toneHz = u32(controller.gamepad.sThumbRY / 100 + 450)
+            if(pad.sThumbLY < 0 ) { stickLeftY = f32(pad.sThumbLY) / -32768 }
+            else { stickLeftY = f32(pad.sThumbLY) / -32767 }
+            
+            if(pad.sThumbRX < 0 ) { stickRightX = f32(pad.sThumbRX) / 32768 }
+            else { stickRightX = f32(pad.sThumbRX) / 32767 }
 
+            if(pad.sThumbRY < 0 ) { stickRightY = f32(pad.sThumbRY) / -32768 }
+            else { stickRightY = f32(pad.sThumbRY) / -32767 }
+
+
+            newController.lStick.start[.x] = oldController.lStick.end[.x] 
+            newController.lStick.min[.x] = stickLeftX
+            newController.lStick.max[.x] = stickLeftX
+            newController.lStick.end[.x] = stickLeftX
+
+            newController.lStick.start[.y] = oldController.lStick.end[.y] 
+            newController.lStick.min[.y] = stickLeftY
+            newController.lStick.max[.y] = stickLeftY
+            newController.lStick.end[.y] = stickLeftY
+
+            newController.rStick.start[.x] = oldController.rStick.end[.x] 
+            newController.rStick.min[.x] = stickRightX
+            newController.rStick.max[.x] = stickRightX
+            newController.rStick.end[.x] = stickRightX
+              
+            newController.rStick.start[.y] = oldController.rStick.end[.y] 
+            newController.rStick.min[.y] = stickRightY
+            newController.rStick.max[.y] = stickRightY
+            newController.rStick.end[.y] = stickRightY
+
+            /*TODO: Move to game layer
             vibration : XINPUT.VIBRATION 
-
             if buttonB do vibration.wRightMotorSpeed = 60000
             if buttonX do vibration.wLeftMotorSpeed = 60000
-
             XINPUT.SetState(0, &vibration)
+            */
 
           } else {
             //NOTE (Carbon): Controller is not avaliable
@@ -235,16 +295,17 @@ main :: proc() {
 
         globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
 
-
-
-        GAME.UpdateAndRender(&colorBuffer, &soundBuffer, redOffset, greenOffset, blueOffset, toneHz)
+        GAME.UpdateAndRender(&colorBuffer, &soundBuffer, newInput)
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
         WIN32.ReleaseDC(window, deviceContext)
 
-        endCyclesCount : i64 = INTRINSICS.read_cycle_counter()
+        temp: ^GAME.input = newInput
+        newInput = oldInput
+        oldInput = temp
 
+        endCyclesCount : i64 = INTRINSICS.read_cycle_counter()
         endCounter : WIN32.LARGE_INTEGER 
         WIN32.QueryPerformanceCounter(&endCounter)
         
@@ -463,3 +524,11 @@ wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 41000) -> bool {
       return true
 }
    
+@private 
+wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
+                                   newState, oldState: ^GAME.button_state, 
+                                   buttonBit: WIN32.WORD) {
+  newState.endedDown = bool(XInputButtonState & buttonBit)
+  oldState.transitionCount += 1 if (oldState.endedDown != newState.endedDown) else 0
+}
+
