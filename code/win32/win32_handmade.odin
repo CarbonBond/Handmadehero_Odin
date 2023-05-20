@@ -529,6 +529,6 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
                                    newState, oldState: ^GAME.button_state, 
                                    buttonBit: WIN32.WORD) {
   newState.endedDown = bool(XInputButtonState & buttonBit)
-  oldState.transitionCount += 1 if (oldState.endedDown != newState.endedDown) else 0
+  oldState.transitionCount = 1 if (oldState.endedDown != newState.endedDown) else 0
 }
 
