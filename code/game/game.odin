@@ -4,10 +4,54 @@ import MATH       "core:math"
 import MEM        "core:mem"
 import FMT        "core:fmt"
 
-playbackTime : f64 = 1
+/* NOTE(Carbon) Compiler flags
+  
+SLOW:
+  false: No slow code allowed 
+  true: slow code allowed
+
+INTERNAL:
+  false: Build for public
+  true: Build for Developer
+
+PRINT:
+  false: Stops print statments
+  true: turns on print statements
+
+*/
+
+memory :: struct {
+  isInitialized        : bool
+  permanentStorageSize : u64
+  permanentStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
+  transientStorageSize : u64
+  transientStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
+}
+
+game_state :: struct {
+  playbackTime : f64 
+  blueOffset   : i32 
+  greenOffset  : i32
+  redOffset    : i32
+  toneHz       : u32
+  toneVolume   : u16
+  toneMulti    : u16
+}
 
 input :: struct {
   controllers: [4]controller_input
+}
+
+position :: enum {
+  x,
+  y
+}
+
+stick :: struct {
+  start:  [position]f32,
+  end:    [position]f32,
+  max:    [position]f32,
+  min:    [position]f32,
 }
 
 buttons :: enum {
@@ -23,18 +67,6 @@ buttons :: enum {
   shoulder_right,
   back,
   start,
-}
-
-position :: enum {
-  x,
-  y
-}
-
-stick :: struct {
-  start:  [position]f32,
-  end:    [position]f32,
-  max:    [position]f32,
-  min:    [position]f32,
 }
 
 controller_input :: struct {
@@ -69,12 +101,6 @@ sound_output_buffer :: struct {
 
 //Global for now
 
-blueOffset  : i32 = 0
-greenOffset : i32 = 0
-redOffset   : i32 = 0
-toneHz      : u32 = 450
-toneVolume  : u16 = 500
-toneMulti   : u16 = 1
 
 //TODO(Carbon) is there a better way?
 lVibration : u16 = 0
@@ -82,25 +108,42 @@ rVibration : u16 = 0
 
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
-UpdateAndRender :: proc(colorBuffer : ^offscreen_buffer, 
+UpdateAndRender :: proc(gameMemory:   ^memory, 
+                        colorBuffer : ^offscreen_buffer, 
                         soundBuffer:  ^sound_output_buffer,
-                        gameControls: ^input ) {
+                        gameControls: ^input) {
+                        //TODO(Carbon): Pass Time
+
+  when #config(SLOW, true) {
+    assert(size_of(game_state) <= gameMemory.permanentStorageSize, "Game state to large for memory")
+  }
+
+  gameState := cast(^game_state)(gameMemory.permanentStorage)
+
+  if !gameMemory.isInitialized {
+    gameMemory.isInitialized = true
+
+    gameState.playbackTime = 1
+    gameState.toneHz      = 450
+    gameState.toneVolume  = 500
+    gameState.toneMulti   = 1
+  }
 
   input0 := gameControls.controllers[0]
   if(input0.isAnalog) {
 
-    greenOffset += i32(5 * (input0.rStick.end[.x]))
-    blueOffset  += i32(5 * (input0.rStick.end[.y]))
+    gameState.greenOffset += i32(5 * (input0.rStick.end[.x]))
+    gameState.blueOffset  += i32(5 * (input0.rStick.end[.y]))
 
-    redOffset   += i32(1 * (input0.lStick.end[.x]))
-    toneHz      =  -u32(500 * (input0.lStick.end[.y])) + 600
+    gameState.redOffset   += i32(1 * (input0.lStick.end[.x]))
+    gameState.toneHz      =  -u32(500 * (input0.lStick.end[.y])) + 600
 
   } else {
   }
 
-  if input0.buttons[.action_up].endedDown && toneVolume < 2000 { toneVolume += 10 }
-  if input0.buttons[.action_down].endedDown && toneVolume > 0 { toneVolume -= 10 }
-  if input0.buttons[.action_left].endedDown { toneMulti = 0 } else { toneMulti = 1 }
+  if input0.buttons[.action_up].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
+  if input0.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
+  if input0.buttons[.action_left].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
 
   if input0.buttons[.move_left].endedDown { lVibration = 60000}
   else { lVibration = 0 }
@@ -108,23 +151,23 @@ UpdateAndRender :: proc(colorBuffer : ^offscreen_buffer,
   if input0.buttons[.move_right].endedDown { rVibration = 60000 }
   else { rVibration = 0 }
 
-  renderWeirdGradiant(colorBuffer, greenOffset, blueOffset, redOffset)
+  renderWeirdGradiant(colorBuffer, gameState.greenOffset, gameState.blueOffset, gameState.redOffset)
 
   //TODO(Carbon) Allow sample offsets
-  outputSound(soundBuffer)
+  outputSound(gameState, soundBuffer)
 }
 
-outputSound :: proc(soundBuffer: ^sound_output_buffer) {
-  wavePeriod := soundBuffer.samplesPerSecond/toneHz
+outputSound :: proc(gameState: ^game_state, soundBuffer: ^sound_output_buffer) {
+  wavePeriod := soundBuffer.samplesPerSecond/gameState.toneHz
   buffer     := soundBuffer.samples 
 
   for frameIndex := 0; frameIndex < int(soundBuffer.sampleCount); frameIndex += 1 {
-    amp := f64(toneVolume) * MATH.sin(playbackTime) * f64(toneMulti) 
+    amp := f64(gameState.toneVolume) * MATH.sin(gameState.playbackTime) * f64(gameState.toneMulti) 
     buffer^ = i16(amp)
     buffer = MEM.ptr_offset(buffer, 1)
     buffer^ = i16(amp)
     buffer = MEM.ptr_offset(buffer, 1)
-    playbackTime += 6.28 / f64(wavePeriod)
+    gameState.playbackTime += 6.28 / f64(wavePeriod)
   }
 }
 

@@ -9,7 +9,7 @@ import INTRINSICS "core:intrinsics"
 
 import XINPUT  "../xinput" 
 import WASAPI  "../audio/wasapi"
-import H       "../helper"
+import HELPER       "../helper"
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
@@ -116,12 +116,36 @@ main :: proc() {
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
+
       samples := cast(^i16) WIN32.VirtualAlloc(
          nil,
          uint(globalAudio.bufferSizeFrames) * uint(globalAudio.bytesPerSample) * 2 ,
          WIN32.MEM_RESERVE | WIN32.MEM_COMMIT,
          WIN32.PAGE_READWRITE,
       )
+
+      when #config(INTERNAL, true) {
+        baseAddress : WIN32.LPVOID = MEM.ptr_offset(cast(^u64)cast(uintptr)(0),
+                                                    HELPER.terabytes(2))
+      } else {
+        baseAddress : WIN32.LPVOID = nil
+      }
+
+      gameMemory : GAME.memory 
+      gameMemory.permanentStorageSize = HELPER.megabytes(64);
+      gameMemory.transientStorageSize = HELPER.gigabytes(4);
+
+      totalSize := gameMemory.transientStorageSize + gameMemory.permanentStorageSize
+
+      gameMemory.permanentStorage = WIN32.VirtualAlloc(
+         baseAddress,
+         uint(totalSize),
+         WIN32.MEM_RESERVE | WIN32.MEM_COMMIT,
+         WIN32.PAGE_READWRITE,
+      )
+
+      gameMemory.transientStorage = MEM.ptr_offset(cast(^u8)(gameMemory.permanentStorage),
+                                                       gameMemory.permanentStorageSize)
 
       prevCounter : WIN32.LARGE_INTEGER
       WIN32.QueryPerformanceCounter(&prevCounter)
@@ -293,7 +317,7 @@ main :: proc() {
 
         globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
 
-        GAME.UpdateAndRender(&colorBuffer, &soundBuffer, newInput)
+        GAME.UpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
@@ -309,21 +333,23 @@ main :: proc() {
         
         counterElapsed:= u64(endCounter - prevCounter) //NOTE Keep at end
         milliSecondsPerFrame := f64(counterElapsed * 1000) / f64(perfCountFrequency)
-        FMT.print("FPS: ", 1000.0/f64(milliSecondsPerFrame), " | Miliseconds: ", milliSecondsPerFrame )
-
         cyclesElapsed := endCyclesCount - prevCyclesCount
-        FMT.println(" | MegaCycles:", f64(cyclesElapsed) / (1000000))
+
+        when #config(PRINT, true) { //TODO(Carbon): Better logging system
+          FMT.println("FPS: ", 1000.0/f64(milliSecondsPerFrame), " | Miliseconds: ", milliSecondsPerFrame,
+                      " | MegaCycles:", f64(cyclesElapsed) / (1000000))
+                    }
 
         prevCounter = endCounter
         prevCyclesCount = endCyclesCount
       }
     } else {
-      H.MessageBox("Create Window Fail!", "Handmade Hero")
+      HELPER.MessageBox("Create Window Fail!", "Handmade Hero")
     //TODO(Carbon) Uses custom logging if CreateWindow failed
     }
 
   } else {
-      H.MessageBox("Register Class Fail!", "Handmade Hero")
+      HELPER.MessageBox("Register Class Fail!", "Handmade Hero")
   //TODO(Carbon) Uses custom logging if RegisterClass failed
   }
 }
@@ -529,4 +555,3 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
   newState.endedDown = bool(XInputButtonState & buttonBit)
   oldState.transitionCount = 1 if (oldState.endedDown != newState.endedDown) else 0
 }
-

@@ -21,3 +21,15 @@ MessageBox :: proc(text, caption: string) {
                     WIN32.MB_OK|WIN32.MB_ICONINFORMATION)
 }
 
+kilobytes :: proc(num: u64) -> u64 {
+  return num * 1024
+}
+megabytes :: proc(num: u64) -> u64 {
+  return num * 1024 * 1024
+}
+gigabytes :: proc(num: u64) -> u64 {
+  return num * 1024 * 1024 * 1024
+}
+terabytes :: proc(num: u64) -> u64 {
+  return num * 1024 * 1024 * 1024 * 1024
+}
