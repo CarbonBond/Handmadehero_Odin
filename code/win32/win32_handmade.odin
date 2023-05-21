@@ -254,12 +254,10 @@ main :: proc() {
             newController.rStick.max[.y] = stickRightY
             newController.rStick.end[.y] = stickRightY
 
-            /*TODO: Move to game layer
             vibration : XINPUT.VIBRATION 
-            if buttonB do vibration.wRightMotorSpeed = 60000
-            if buttonX do vibration.wLeftMotorSpeed = 60000
-            XINPUT.SetState(0, &vibration)
-            */
+            vibration.wRightMotorSpeed = GAME.rVibration
+            vibration.wLeftMotorSpeed = GAME.lVibration
+            XINPUT.SetState(i, &vibration)
 
           } else {
             //NOTE (Carbon): Controller is not avaliable

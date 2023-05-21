@@ -73,8 +73,12 @@ blueOffset  : i32 = 0
 greenOffset : i32 = 0
 redOffset   : i32 = 0
 toneHz      : u32 = 450
-toneVolume  : u16 = 1000
+toneVolume  : u16 = 500
 toneMulti   : u16 = 1
+
+//TODO(Carbon) is there a better way?
+lVibration : u16 = 0
+rVibration : u16 = 0
 
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
@@ -97,6 +101,12 @@ UpdateAndRender :: proc(colorBuffer : ^offscreen_buffer,
   if input0.buttons[.action_up].endedDown && toneVolume < 2000 { toneVolume += 10 }
   if input0.buttons[.action_down].endedDown && toneVolume > 0 { toneVolume -= 10 }
   if input0.buttons[.action_left].endedDown { toneMulti = 0 } else { toneMulti = 1 }
+
+  if input0.buttons[.move_left].endedDown { lVibration = 60000}
+  else { lVibration = 0 }
+
+  if input0.buttons[.move_right].endedDown { rVibration = 60000 }
+  else { rVibration = 0 }
 
   renderWeirdGradiant(colorBuffer, greenOffset, blueOffset, redOffset)
 
