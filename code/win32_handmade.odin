@@ -165,56 +165,7 @@ main :: proc() {
         keyboardController : ^game_controller_input = &newInput.controllers[0]
         keyboardController^ = {}
 
-        message: MSG
-        for PeekMessageW(&message, nil, 0, 0, PM_REMOVE) {
-
-          switch message.message {
-            case WM_QUIT: 
-              globalRunning = false;
-               
-            case WM_SYSKEYDOWN: fallthrough
-            case WM_SYSKEYUP: fallthrough
-            case WM_KEYDOWN: fallthrough
-            case WM_KEYUP:
-              
-              VKCode  := u32(message.wParam)
-              wasDown := bool(message.lParam & ( 1 << 30))
-              isDown  := bool(message.lParam & ( 1 << 31) == 0)
-              altDown := bool(message.lParam & ( 1 << 29))
-
-              //Stop Key Repeating
-              if wasDown != isDown {
-                switch VKCode {
-                  case 'W': 
-                    wProcessKeyboardMessage(&keyboardController.buttons[.move_up], isDown)
-                  case 'A': 
-                    wProcessKeyboardMessage(&keyboardController.buttons[.move_left], isDown)
-                  case 'S': 
-                    wProcessKeyboardMessage(&keyboardController.buttons[.move_down], isDown)
-                  case 'D': 
-                    wProcessKeyboardMessage(&keyboardController.buttons[.move_right], isDown)
-                  case 'Q': 
-                  case 'E': 
-
-                  case VK_UP:
-                  case VK_LEFT:
-                  case VK_DOWN:
-                  case VK_RIGHT:
-                  case globalControls.close:
-                    globalRunning = false
-                  case VK_SPACE:
-                  case VK_F4:
-                    if altDown do globalRunning = false
-                  
-                }
-              }
-
-            case: //Default
-              TranslateMessage(&message)
-              DispatchMessageW(&message)
-
-          }
-        }
+        wHandlePendingMessages(keyboardController)
 
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
@@ -581,6 +532,61 @@ wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
                               isDown: bool) {
   keyboardState.endedDown = isDown;
   keyboardState.transitionCount += 1
+}
+
+wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
+  using WIN32 
+   
+  message: MSG
+  for PeekMessageW(&message, nil, 0, 0, PM_REMOVE) {
+
+    switch message.message {
+      case WM_QUIT: 
+        globalRunning = false;
+         
+      case WM_SYSKEYDOWN: fallthrough
+      case WM_SYSKEYUP: fallthrough
+      case WM_KEYDOWN: fallthrough
+      case WM_KEYUP:
+        
+        VKCode  := u32(message.wParam)
+        wasDown := bool(message.lParam & ( 1 << 30))
+        isDown  := bool(message.lParam & ( 1 << 31) == 0)
+        altDown := bool(message.lParam & ( 1 << 29))
+
+        //Stop Key Repeating
+        if wasDown != isDown {
+          switch VKCode {
+            case 'W': 
+              wProcessKeyboardMessage(&keyboardController.buttons[.move_up], isDown)
+            case 'A': 
+              wProcessKeyboardMessage(&keyboardController.buttons[.move_left], isDown)
+            case 'S': 
+              wProcessKeyboardMessage(&keyboardController.buttons[.move_down], isDown)
+            case 'D': 
+              wProcessKeyboardMessage(&keyboardController.buttons[.move_right], isDown)
+            case 'Q': 
+            case 'E': 
+
+            case VK_UP:
+            case VK_LEFT:
+            case VK_DOWN:
+            case VK_RIGHT:
+            case globalControls.close:
+              globalRunning = false
+            case VK_SPACE:
+            case VK_F4:
+              if altDown do globalRunning = false
+            
+          }
+        }
+
+      case: //Default
+        TranslateMessage(&message)
+        DispatchMessageW(&message)
+
+    }
+  }
 }
 
 
