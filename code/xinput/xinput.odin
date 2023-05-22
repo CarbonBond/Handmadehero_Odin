@@ -1,7 +1,6 @@
 package xinput
 
 import WIN32  "core:sys/windows"
-import H "../helper"
 import DLIB "core:dynlib"
 
 

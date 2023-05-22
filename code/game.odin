@@ -151,6 +151,11 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
   } else {
   }
 
+  if input0.buttons[.move_up].endedDown { gameState.blueOffset -= 500 }
+  if input0.buttons[.move_down].endedDown { gameState.blueOffset += 500 }
+  if input0.buttons[.move_left].endedDown { gameState.greenOffset -= 500 }
+  if input0.buttons[.move_right].endedDown { gameState.greenOffset += 500 }
+
   if input0.buttons[.action_up].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
   if input0.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
   if input0.buttons[.action_left].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }

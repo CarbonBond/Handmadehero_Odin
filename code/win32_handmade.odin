@@ -39,7 +39,7 @@ foreign gdi32 {
 
 // TODO(Carbon) Change from global
 @private
-running            : bool
+globalRunning      : bool
 globalBuffer       : w_offscreen_buffer
 globalAudio        : w_audio
 globalControls     : controls
@@ -70,17 +70,18 @@ controls :: struct {
 }
 
 main :: proc() {
+  using WIN32
 
   //Rebinding Controls test
-    globalControls.close = WIN32.VK_ESCAPE
+    globalControls.close = VK_ESCAPE
   //Controls Test end
 
-  instance := cast(WIN32.HINSTANCE)WIN32.GetModuleHandleA(nil)
+  instance := cast(HINSTANCE)GetModuleHandleA(nil)
 
   wResizeDIBSection(&globalBuffer, 1280, 720)
 
-  windowClass :               WIN32.WNDCLASSW
-  windowClass.style         = WIN32.CS_HREDRAW | WIN32.CS_VREDRAW | WIN32.CS_OWNDC
+  windowClass :               WNDCLASSW
+  windowClass.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC
   windowClass.lpfnWndProc   = wWindowCallback
   windowClass.hInstance     = instance
   /*TODO(Carbon) Set Icon
@@ -92,16 +93,16 @@ main :: proc() {
   windowClass.lpszClassName = &name_u16[0]
 
 
-  if WIN32.RegisterClassW(&windowClass) != 0 {
-    window: WIN32.HWND = WIN32.CreateWindowExW(
+  if RegisterClassW(&windowClass) != 0 {
+    window: HWND = CreateWindowExW(
       0,
       windowClass.lpszClassName,
       &name_u16[0],
-      WIN32.WS_OVERLAPPEDWINDOW|WIN32.WS_VISIBLE,
-      WIN32.CW_USEDEFAULT,
-      WIN32.CW_USEDEFAULT,
-      WIN32.CW_USEDEFAULT,
-      WIN32.CW_USEDEFAULT,
+      WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+      CW_USEDEFAULT,
+      CW_USEDEFAULT,
+      CW_USEDEFAULT,
+      CW_USEDEFAULT,
       nil,
       nil,
       instance,
@@ -110,24 +111,24 @@ main :: proc() {
     if window != nil  {
       //NOTE(Carbon) As we use CS_OWNDC we don't share the context 
       //             We can use one DC
-      deviceContext := WIN32.GetDC(window)
+      deviceContext := GetDC(window)
 
       //NOTE(Carbon): TESTING WASAPI 
 
       audioSuccess := wInitAudio(&globalAudio)
 
-      samples := cast(^i16) WIN32.VirtualAlloc(
+      samples := cast(^i16) VirtualAlloc(
          nil,
          uint(globalAudio.bufferSizeFrames) * uint(globalAudio.bytesPerSample) * 2 ,
-         WIN32.MEM_RESERVE | WIN32.MEM_COMMIT,
-         WIN32.PAGE_READWRITE,
+         MEM_RESERVE | MEM_COMMIT,
+         PAGE_READWRITE,
       )
 
       when #config(INTERNAL, true) {
-        baseAddress : WIN32.LPVOID = MEM.ptr_offset(cast(^u64)cast(uintptr)(0),
+        baseAddress : LPVOID = MEM.ptr_offset(cast(^u64)cast(uintptr)(0),
                                                     HELPER.terabytes(2))
       } else {
-        baseAddress : WIN32.LPVOID = nil
+        baseAddress : LPVOID = nil
       }
 
       gameMemory : game_memory 
@@ -136,21 +137,21 @@ main :: proc() {
 
       totalSize := gameMemory.transientStorageSize + gameMemory.permanentStorageSize
 
-      gameMemory.permanentStorage = WIN32.VirtualAlloc(
+      gameMemory.permanentStorage = VirtualAlloc(
          baseAddress,
          uint(totalSize),
-         WIN32.MEM_RESERVE | WIN32.MEM_COMMIT,
-         WIN32.PAGE_READWRITE,
+         MEM_RESERVE | MEM_COMMIT,
+         PAGE_READWRITE,
       )
 
       gameMemory.transientStorage = MEM.ptr_offset(cast(^u8)(gameMemory.permanentStorage),
                                                        gameMemory.permanentStorageSize)
 
-      prevCounter : WIN32.LARGE_INTEGER
-      WIN32.QueryPerformanceCounter(&prevCounter)
+      prevCounter : LARGE_INTEGER
+      QueryPerformanceCounter(&prevCounter)
       
-      perfCountFrequency : WIN32.LARGE_INTEGER
-      WIN32.QueryPerformanceFrequency(&perfCountFrequency)
+      perfCountFrequency : LARGE_INTEGER
+      QueryPerformanceFrequency(&perfCountFrequency)
 
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
@@ -158,19 +159,61 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
-      running = true 
-      for running {
+      globalRunning = true 
+      for globalRunning {
 
+        keyboardController : ^game_controller_input = &newInput.controllers[0]
+        keyboardController^ = {}
 
-        message: WIN32.MSG
-        for WIN32.PeekMessageW(&message, nil, 0, 0, WIN32.PM_REMOVE) {
+        message: MSG
+        for PeekMessageW(&message, nil, 0, 0, PM_REMOVE) {
 
-          if message.message == WIN32.WM_QUIT {
-            running = false;
+          switch message.message {
+            case WM_QUIT: 
+              globalRunning = false;
+               
+            case WM_SYSKEYDOWN: fallthrough
+            case WM_SYSKEYUP: fallthrough
+            case WM_KEYDOWN: fallthrough
+            case WM_KEYUP:
+              
+              VKCode  := u32(message.wParam)
+              wasDown := bool(message.lParam & ( 1 << 30))
+              isDown  := bool(message.lParam & ( 1 << 31) == 0)
+              altDown := bool(message.lParam & ( 1 << 29))
+
+              //Stop Key Repeating
+              if wasDown != isDown {
+                switch VKCode {
+                  case 'W': 
+                    wProcessKeyboardMessage(&keyboardController.buttons[.move_up], isDown)
+                  case 'A': 
+                    wProcessKeyboardMessage(&keyboardController.buttons[.move_left], isDown)
+                  case 'S': 
+                    wProcessKeyboardMessage(&keyboardController.buttons[.move_down], isDown)
+                  case 'D': 
+                    wProcessKeyboardMessage(&keyboardController.buttons[.move_right], isDown)
+                  case 'Q': 
+                  case 'E': 
+
+                  case VK_UP:
+                  case VK_LEFT:
+                  case VK_DOWN:
+                  case VK_RIGHT:
+                  case globalControls.close:
+                    globalRunning = false
+                  case VK_SPACE:
+                  case VK_F4:
+                    if altDown do globalRunning = false
+                  
+                }
+              }
+
+            case: //Default
+              TranslateMessage(&message)
+              DispatchMessageW(&message)
+
           }
-
-          WIN32.TranslateMessage(&message)
-          WIN32.DispatchMessageW(&message)
         }
 
         //TODO(Carbon) Add controller polling here
@@ -180,7 +223,7 @@ main :: proc() {
           MaxControllerCount = len(newInput.controllers)
         }
         
-        for i : WIN32.DWORD = 0; i < MaxControllerCount; i += 1 { 
+        for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
 
           oldController : ^game_controller_input = &oldInput.controllers[i]
           newController : ^game_controller_input = &newInput.controllers[i]
@@ -188,7 +231,7 @@ main :: proc() {
           controller: XINPUT.STATE
           err := XINPUT.GetState(i, &controller)
 
-          if err == WIN32.ERROR_SUCCESS {
+          if err == ERROR_SUCCESS {
             //NOTE (Carbon): Controller Plugged in
             pad := &controller.gamepad
 
@@ -311,7 +354,7 @@ main :: proc() {
         soundBuffer.sampleCount = u32(nFramesToWrite)
 
         buffer: ^i16
-        globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^WIN32.BYTE)&buffer)
+        globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
         if nFramesToWrite > 0 {
           MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite * 4))
         }
@@ -322,15 +365,15 @@ main :: proc() {
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
-        WIN32.ReleaseDC(window, deviceContext)
+        ReleaseDC(window, deviceContext)
 
         temp: ^game_input = newInput
         newInput = oldInput
         oldInput = temp
 
         endCyclesCount : i64 = INTRINSICS.read_cycle_counter()
-        endCounter : WIN32.LARGE_INTEGER 
-        WIN32.QueryPerformanceCounter(&endCounter)
+        endCounter : LARGE_INTEGER 
+        QueryPerformanceCounter(&endCounter)
         
         counterElapsed:= u64(endCounter - prevCounter) //NOTE Keep at end
         milliSecondsPerFrame := f64(counterElapsed * 1000) / f64(perfCountFrequency)
@@ -355,25 +398,34 @@ main :: proc() {
   }
 }
 
-wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
+wWindowCallback :: proc "std" (window: WIN32.HWND  , message: WIN32.UINT,
                                    wParam: WIN32.WPARAM, lParam : WIN32.LPARAM) -> 
                                   WIN32.LRESULT {
-  result : WIN32.LRESULT = 0
-  switch(message) {
 
-    case WIN32.WM_DESTROY:
-      running = false
+  using WIN32
+  result : LRESULT = 0
+  switch(message) {
+    case WM_QUIT:       fallthrough
+    case WM_SYSKEYDOWN: fallthrough
+    case WM_SYSKEYUP:   fallthrough
+    case WM_KEYDOWN:    fallthrough
+    case WM_KEYUP:
+    //TODO(carbon) Assert failure here, can't due to Odin's context system.
+    //             Learn about odin's contexts
+
+    case WM_DESTROY:
+      globalRunning = false
       //TODO(Carbon) Handle as an error?
 
-    case WIN32.WM_CLOSE:
-      running = false
+    case WM_CLOSE:
+      globalRunning = false
       //TODO(Carbon) Possibly message/warn user.
 
-    case WIN32.WM_ACTIVATEAPP:
+    case WM_ACTIVATEAPP:
 
-    case WIN32.WM_PAINT:
-      paint : WIN32.PAINTSTRUCT
-      deviceContext := WIN32.BeginPaint(window, &paint)
+    case WM_PAINT:
+      paint : PAINTSTRUCT
+      deviceContext := BeginPaint(window, &paint)
       x      :=  paint.rcPaint.left
       y      :=  paint.rcPaint.top
       height :=  paint.rcPaint.bottom - paint.rcPaint.top
@@ -381,43 +433,11 @@ wWindowCallback :: proc "stdcall" (window: WIN32.HWND  , message: WIN32.UINT,
 
       windowWidth, windowHeight := wWindowDemensions(window)  
       wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
-      WIN32.EndPaint(window, &paint)
+      EndPaint(window, &paint)
 
-    case WIN32.WM_SYSKEYDOWN: fallthrough
-    case WIN32.WM_SYSKEYUP: fallthrough
-    case WIN32.WM_KEYDOWN: fallthrough
-    case WIN32.WM_KEYUP:
-      
-      VKCode  := u32(wParam)
-      wasDown := bool(lParam & ( 1 << 30))
-      isDown  := bool(lParam & ( 1 << 31) == 0)
-      altDown := bool(lParam & ( 1 << 29))
-
-      //Stop Key Repeating
-      if wasDown != isDown {
-        switch VKCode {
-          case 'W': 
-          case 'A': 
-          case 'S': 
-          case 'D': 
-          case 'Q': 
-          case 'E': 
-
-          case WIN32.VK_UP:
-          case WIN32.VK_LEFT:
-          case WIN32.VK_DOWN:
-          case WIN32.VK_RIGHT:
-          case globalControls.close:
-            running = false
-          case WIN32.VK_SPACE:
-          case WIN32.VK_F4:
-            if altDown do running = false
-          
-        }
-      }
       
     case: //Default
-      result = WIN32.DefWindowProcW(window, message, wParam, lParam)
+      result = DefWindowProcW(window, message, wParam, lParam)
   }
 
   return result
@@ -555,6 +575,12 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
                                    buttonBit: WIN32.WORD) {
   newState.endedDown = bool(XInputButtonState & buttonBit)
   oldState.transitionCount = 1 if (oldState.endedDown != newState.endedDown) else 0
+}
+
+wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
+                              isDown: bool) {
+  keyboardState.endedDown = isDown;
+  keyboardState.transitionCount += 1
 }
 
 
