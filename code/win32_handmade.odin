@@ -7,16 +7,15 @@ import WIN32      "core:sys/windows"
 import MEM        "core:mem"
 import INTRINSICS "core:intrinsics"
 
-import XINPUT  "../xinput" 
-import WASAPI  "../audio/wasapi"
-import HELPER       "../helper"
+import XINPUT  "./xinput" 
+import WASAPI  "./audio/wasapi"
+import HELPER  "./helper"
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
     CreateCompatibleDC :: proc "stdcall" (hdc : WIN32.HDC) -> WIN32.HDC ---
 }
 
-import GAME "../game" //Actual game
 
 /*TODO(Carbon) Missing Functionality
   
@@ -131,7 +130,7 @@ main :: proc() {
         baseAddress : WIN32.LPVOID = nil
       }
 
-      gameMemory : GAME.memory 
+      gameMemory : game_memory 
       gameMemory.permanentStorageSize = HELPER.megabytes(64);
       gameMemory.transientStorageSize = HELPER.gigabytes(4);
 
@@ -155,7 +154,7 @@ main :: proc() {
 
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
-      inputs : [2]GAME.input
+      inputs : [2]game_input
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
@@ -183,8 +182,8 @@ main :: proc() {
         
         for i : WIN32.DWORD = 0; i < MaxControllerCount; i += 1 { 
 
-          oldController : ^GAME.controller_input = &oldInput.controllers[i]
-          newController : ^GAME.controller_input = &newInput.controllers[i]
+          oldController : ^game_controller_input = &oldInput.controllers[i]
+          newController : ^game_controller_input = &newInput.controllers[i]
           
           controller: XINPUT.STATE
           err := XINPUT.GetState(i, &controller)
@@ -278,10 +277,12 @@ main :: proc() {
             newController.rStick.max[.y] = stickRightY
             newController.rStick.end[.y] = stickRightY
 
+            /* TODO(Carbon) Does this have to be round trippy?
             vibration : XINPUT.VIBRATION 
-            vibration.wRightMotorSpeed = GAME.rVibration
-            vibration.wLeftMotorSpeed = GAME.lVibration
+            vibration.wRightMotorSpeed = 
+            vibration.wLeftMotorSpeed = 
             XINPUT.SetState(i, &vibration)
+            */
 
           } else {
             //NOTE (Carbon): Controller is not avaliable
@@ -291,7 +292,7 @@ main :: proc() {
         }
 
         
-        colorBuffer : GAME.offscreen_buffer
+        colorBuffer : game_offscreen_buffer
         colorBuffer.memory = globalBuffer.memory
         colorBuffer.width  = globalBuffer.width
         colorBuffer.height = globalBuffer.height
@@ -304,7 +305,7 @@ main :: proc() {
 
         nFramesToWrite := ((globalAudio.bufferSizeFrames / 72 ) - bufferPadding)
 
-        soundBuffer : GAME.sound_output_buffer
+        soundBuffer : game_sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
         soundBuffer.sampleCount = u32(nFramesToWrite)
@@ -317,13 +318,13 @@ main :: proc() {
 
         globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
 
-        GAME.UpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
+        gameUpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
         WIN32.ReleaseDC(window, deviceContext)
 
-        temp: ^GAME.input = newInput
+        temp: ^game_input = newInput
         newInput = oldInput
         oldInput = temp
 
@@ -550,8 +551,104 @@ wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 41000) -> bool {
    
 @private 
 wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
-                                   newState, oldState: ^GAME.button_state, 
+                                   newState, oldState: ^game_button_state, 
                                    buttonBit: WIN32.WORD) {
   newState.endedDown = bool(XInputButtonState & buttonBit)
   oldState.transitionCount = 1 if (oldState.endedDown != newState.endedDown) else 0
+}
+
+
+when #config(INTERNAL, true) {
+
+  //NOTE(Carbon) Don't used for shipped game. Locks and not thread safe. 
+  //             Doesn't protext lost data
+
+  DEBUG_read_file_result :: struct {
+    contentsSize: u32
+    contents: rawptr
+  }
+
+  DEBUG_platformReadEntireFile :: proc(filename: string) -> (DEBUG_read_file_result, bool) {
+    using WIN32
+
+    result : DEBUG_read_file_result
+    success := false
+
+    filename_w: [dynamic]u16
+    append(&filename_w, 0)
+    for letter in filename{
+      append(&filename_w, 0)
+    }
+
+    UTF16.encode_string(filename_w[:], filename)
+
+    fileHandle := CreateFileW( &filename_w[0], GENERIC_READ, FILE_SHARE_READ,
+                                nil, OPEN_EXISTING, 0, nil)
+
+    if fileHandle != INVALID_HANDLE_VALUE {
+      defer CloseHandle(fileHandle)
+
+
+      fileSize: LARGE_INTEGER
+      if GetFileSizeEx(fileHandle, &fileSize) {
+        result.contents = VirtualAlloc(
+          nil,
+          uint(fileSize),
+          MEM_RESERVE | MEM_COMMIT,
+          PAGE_READWRITE,)
+           
+        if result.contents != nil {
+          fileSize32 := HELPER.safeTruncateU64(u64(fileSize))
+          bytesRead : DWORD
+          if ReadFile( fileHandle, result.contents, fileSize32, &bytesRead, nil) && 
+             bytesRead == fileSize32 {
+               result.contentsSize = fileSize32
+               success = true
+          } else {
+            DEBUG_platformFreeFileMemory(result.contents)
+            result.contents, success = nil, false
+          }
+        }
+      }
+    }
+
+    return result, success
+  }
+
+  DEBUG_platformFreeFileMemory :: proc(memory: rawptr) {
+    using WIN32
+    if memory != nil do WIN32.VirtualFree(memory, 0, MEM_RELEASE)
+    return
+  }
+
+
+  DEBUG_platformWriteEntireFile :: proc(filename: string, memorySize: u32,
+                                        memory: rawptr) -> bool {
+    using WIN32
+
+    result := false
+
+    filename_w: [dynamic]u16
+    append(&filename_w, 0)
+    for letter in filename{
+      append(&filename_w, 0)
+    }
+
+    UTF16.encode_string(filename_w[:], filename)
+
+    fileHandle := CreateFileW( &filename_w[0], GENERIC_WRITE, 0,
+                                nil, CREATE_ALWAYS, 0, nil)
+
+    if fileHandle != INVALID_HANDLE_VALUE {
+      defer CloseHandle(fileHandle)
+
+      bytesWritten : DWORD
+      if WriteFile( fileHandle, memory, memorySize, &bytesWritten, nil) {
+        result = (bytesWritten == memorySize)
+      } else {
+      }
+    }
+    return result 
+  }
+
 }

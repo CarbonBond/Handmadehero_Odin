@@ -33,3 +33,9 @@ gigabytes :: proc(num: u64) -> u64 {
 terabytes :: proc(num: u64) -> u64 {
   return num * 1024 * 1024 * 1024 * 1024
 }
+
+
+safeTruncateU64 :: proc(value: u64) -> u32 {
+  assert( value <= 0xFFFFFFFF, "filesize is too big to read")
+  return u32(value)
+}

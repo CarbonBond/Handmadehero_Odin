@@ -1,4 +1,4 @@
-package game
+package main
 
 import MATH       "core:math"
 import MEM        "core:mem"
@@ -20,7 +20,8 @@ PRINT:
 
 */
 
-memory :: struct {
+
+game_memory :: struct {
   isInitialized        : bool
   permanentStorageSize : u64
   permanentStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
@@ -38,23 +39,25 @@ game_state :: struct {
   toneMulti    : u16
 }
 
-input :: struct {
-  controllers: [4]controller_input
+
+game_input :: struct {
+  //TODO(Carbon): Add clock value
+  controllers: [4]game_controller_input
 }
 
-position :: enum {
+game_position :: enum {
   x,
   y
 }
 
-stick :: struct {
-  start:  [position]f32,
-  end:    [position]f32,
-  max:    [position]f32,
-  min:    [position]f32,
+game_stick :: struct {
+  start:  [game_position]f32,
+  end:    [game_position]f32,
+  max:    [game_position]f32,
+  min:    [game_position]f32,
 }
 
-buttons :: enum {
+game_buttons :: enum {
   move_up,
   move_down,
   move_left,
@@ -69,31 +72,31 @@ buttons :: enum {
   start,
 }
 
-controller_input :: struct {
+game_controller_input :: struct {
 
   isConnected: bool,
   isAnalog:    bool,
 
-  lStick: stick
-  rStick: stick
+  lStick: game_stick
+  rStick: game_stick
 
-  buttons:     [buttons]button_state
+  buttons:     [game_buttons]game_button_state
   
 }
 
-button_state :: struct {
+game_button_state :: struct {
   transitionCount: int
   endedDown:       bool
 }
 
-offscreen_buffer :: struct {
+game_offscreen_buffer :: struct {
         memory        : [^]u32
         width         : i32
         height        : i32
         pitch         : i32
 }
 
-sound_output_buffer :: struct {
+game_sound_output_buffer :: struct {
   samples : ^i16
   samplesPerSecond: u32
   sampleCount: u32
@@ -103,15 +106,13 @@ sound_output_buffer :: struct {
 
 
 //TODO(Carbon) is there a better way?
-lVibration : u16 = 0
-rVibration : u16 = 0
 
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
-UpdateAndRender :: proc(gameMemory:   ^memory, 
-                        colorBuffer : ^offscreen_buffer, 
-                        soundBuffer:  ^sound_output_buffer,
-                        gameControls: ^input) {
+gameUpdateAndRender :: proc(gameMemory:   ^game_memory, 
+                        colorBuffer : ^game_offscreen_buffer, 
+                        soundBuffer:  ^game_sound_output_buffer,
+                        gameControls: ^game_input) {
                         //TODO(Carbon): Pass Time
 
   when #config(SLOW, true) {
@@ -121,12 +122,21 @@ UpdateAndRender :: proc(gameMemory:   ^memory,
   gameState := cast(^game_state)(gameMemory.permanentStorage)
 
   if !gameMemory.isInitialized {
-    gameMemory.isInitialized = true
+
+    filename := #file
+    file, success := DEBUG_platformReadEntireFile(filename)
+    if success {
+      // NOTE(Carbon) testing this by writting this file.
+      //DEBUG_platformWriteEntireFile("./test.out", file.contentsSize, file.contents )
+      DEBUG_platformFreeFileMemory(file.contents)
+    }
 
     gameState.playbackTime = 1
     gameState.toneHz      = 450
     gameState.toneVolume  = 500
     gameState.toneMulti   = 1
+
+    gameMemory.isInitialized = true
   }
 
   input0 := gameControls.controllers[0]
@@ -145,11 +155,13 @@ UpdateAndRender :: proc(gameMemory:   ^memory,
   if input0.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
   if input0.buttons[.action_left].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
 
+  /* TODO(Carbon): Removed for the time being, figure out how to add back?
   if input0.buttons[.move_left].endedDown { lVibration = 60000}
   else { lVibration = 0 }
 
   if input0.buttons[.move_right].endedDown { rVibration = 60000 }
   else { rVibration = 0 }
+  */
 
   renderWeirdGradiant(colorBuffer, gameState.greenOffset, gameState.blueOffset, gameState.redOffset)
 
@@ -157,7 +169,7 @@ UpdateAndRender :: proc(gameMemory:   ^memory,
   outputSound(gameState, soundBuffer)
 }
 
-outputSound :: proc(gameState: ^game_state, soundBuffer: ^sound_output_buffer) {
+outputSound :: proc(gameState: ^game_state, soundBuffer: ^game_sound_output_buffer) {
   wavePeriod := soundBuffer.samplesPerSecond/gameState.toneHz
   buffer     := soundBuffer.samples 
 
@@ -171,7 +183,7 @@ outputSound :: proc(gameState: ^game_state, soundBuffer: ^sound_output_buffer) {
   }
 }
 
-renderWeirdGradiant :: proc  (bitmap: ^offscreen_buffer,
+renderWeirdGradiant :: proc  (bitmap: ^game_offscreen_buffer,
                                greenOffset, blueOffset, redOffset: i32) {
 
   bitmapMemoryArray := bitmap.memory[:]
