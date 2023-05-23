@@ -165,6 +165,7 @@ main :: proc() {
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
         newKeyboardController : ^game_controller_input = &newInput.controllers[0]
 
+        newKeyboardController.isConnected = true
         for i in game_buttons {
           newKeyboardController.buttons[i].endedDown = oldKeyboardController.buttons[i].endedDown
         }
@@ -172,8 +173,8 @@ main :: proc() {
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
         MaxControllerCount : u32 = XINPUT.XUSER_MAX_COUNT
-        if MaxControllerCount > len(newInput.controllers) { 
-          MaxControllerCount = len(newInput.controllers)
+        if MaxControllerCount >= len(newInput.controllers) { 
+          MaxControllerCount = len(newInput.controllers) - 1
         }
 
         wHandlePendingMessages(newKeyboardController)
@@ -185,13 +186,15 @@ main :: proc() {
           newController : ^game_controller_input = &newInput.controllers[ourController]
           
           controller: XINPUT.STATE
-          err := XINPUT.GetState(ourController, &controller)
+          err := XINPUT.GetState(i, &controller)
 
           if err == ERROR_SUCCESS {
             //NOTE (Carbon): Controller Plugged in
             pad := &controller.gamepad
 
             newController.isAnalog = true
+            newController.isConnected = true
+            
             /* NOT USED
             //buttonStart     := bool(pad.wButtons & XINPUT.GAMEPAD_START)
             //buttonBack      := bool(pad.wButtons & XINPUT.GAMEPAD_BACK)
@@ -203,23 +206,43 @@ main :: proc() {
             buttonShoulderR := bool(pad.wButtons & XINPUT.GAMEPAD_RIGHT_SHOULDER)
             */
 
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.shoulder_left],
+                                        &newController.buttons[.shoulder_left],
+                                        XINPUT.GAMEPAD_LEFT_SHOULDER)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.shoulder_right],
+                                        &newController.buttons[.shoulder_right],
+                                        XINPUT.GAMEPAD_RIGHT_SHOULDER)
+
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.start],
+                                        &newController.buttons[.start],
+                                        XINPUT.GAMEPAD_START)
+            wProcessXInputDigitalButton(pad.wButtons,
+                                        &oldController.buttons[.back],
+                                        &newController.buttons[.back],
+                                        XINPUT.GAMEPAD_BACK)
+
             //The pressed buttons:
-            wProcessXInputDigitalButton(pad.wButtons,
-                                        &oldController.buttons[.move_up],
-                                        &newController.buttons[.move_up],
-                                        XINPUT.GAMEPAD_DPAD_UP)
-            wProcessXInputDigitalButton(pad.wButtons,
-                                        &oldController.buttons[.move_down],
-                                        &newController.buttons[.move_down],
-                                        XINPUT.GAMEPAD_DPAD_DOWN)
-            wProcessXInputDigitalButton(pad.wButtons,
-                                        &oldController.buttons[.move_left],
-                                        &newController.buttons[.move_left],
-                                        XINPUT.GAMEPAD_DPAD_LEFT)
-            wProcessXInputDigitalButton(pad.wButtons,
-                                        &oldController.buttons[.move_right],
-                                        &newController.buttons[.move_right],
-                                        XINPUT.GAMEPAD_DPAD_RIGHT)
+
+            if bool(pad.wButtons & XINPUT.GAMEPAD_BACK ) {
+              globalRunning = false
+            }
+
+            //Dpad overwriting thumbsticks incase of use
+            if bool(pad.wButtons & XINPUT.GAMEPAD_DPAD_UP) {
+              newController.lStick[.y] = 1
+            }
+            if bool(pad.wButtons & XINPUT.GAMEPAD_DPAD_DOWN) {
+              newController.lStick[.y] = -1
+            }
+            if bool(pad.wButtons & XINPUT.GAMEPAD_DPAD_LEFT) {
+              newController.lStick[.x] = -1
+            }
+            if bool(pad.wButtons & XINPUT.GAMEPAD_DPAD_RIGHT) {
+              newController.lStick[.x] = 1
+            }
 
             wProcessXInputDigitalButton(pad.wButtons,
                                         &oldController.buttons[.action_up],
@@ -238,43 +261,53 @@ main :: proc() {
                                         &newController.buttons[.action_right],
                                         XINPUT.GAMEPAD_B)
 
-            stickLeftX  : f32
-            stickLeftY  : f32
-            stickRightX : f32
-            stickRightY : f32
-
-            if(pad.sThumbLX < 0 ) { stickLeftX = f32(pad.sThumbLX) / 32768 }
-            else { stickLeftX = f32(pad.sThumbLX) / 32767 }
-
-            if(pad.sThumbLY < 0 ) { stickLeftY = f32(pad.sThumbLY) / -32768 }
-            else { stickLeftY = f32(pad.sThumbLY) / -32767 }
-            
-            if(pad.sThumbRX < 0 ) { stickRightX = f32(pad.sThumbRX) / 32768 }
-            else { stickRightX = f32(pad.sThumbRX) / 32767 }
-
-            if(pad.sThumbRY < 0 ) { stickRightY = f32(pad.sThumbRY) / -32768 }
-            else { stickRightY = f32(pad.sThumbRY) / -32767 }
-
-
-            newController.lStick.start[.x] = oldController.lStick.end[.x] 
-            newController.lStick.min[.x] = stickLeftX
-            newController.lStick.max[.x] = stickLeftX
-            newController.lStick.end[.x] = stickLeftX
-
-            newController.lStick.start[.y] = oldController.lStick.end[.y] 
-            newController.lStick.min[.y] = stickLeftY
-            newController.lStick.max[.y] = stickLeftY
-            newController.lStick.end[.y] = stickLeftY
-
-            newController.rStick.start[.x] = oldController.rStick.end[.x] 
-            newController.rStick.min[.x] = stickRightX
-            newController.rStick.max[.x] = stickRightX
-            newController.rStick.end[.x] = stickRightX
+            // Thumbsticks
+            threshhold : f32 = 0.5
+            wProcessXInputDigitalButton(u16(newController.lStick[.y] > threshhold),
+                                        &oldController.buttons[.move_up],
+                                        &newController.buttons[.move_up],
+                                        1)
+            wProcessXInputDigitalButton(u16(newController.lStick[.y] < -threshhold),
+                                        &oldController.buttons[.move_down],
+                                        &newController.buttons[.move_down],
+                                        1)
+            wProcessXInputDigitalButton(u16(newController.lStick[.x] < -threshhold),
+                                        &oldController.buttons[.move_left],
+                                        &newController.buttons[.move_left],
+                                        1)
+            wProcessXInputDigitalButton(u16(newController.lStick[.x] > threshhold),
+                                        &oldController.buttons[.move_right],
+                                        &newController.buttons[.move_right],
+                                        1)
               
-            newController.rStick.start[.y] = oldController.rStick.end[.y] 
-            newController.rStick.min[.y] = stickRightY
-            newController.rStick.max[.y] = stickRightY
-            newController.rStick.end[.y] = stickRightY
+            /* R stick not used
+            wProcessXInputDigitalButton(u16(newController.rStick[.y] < -threshhold),
+                                        &oldController.buttons[.action_up],
+                                        &newController.buttons[.move_up],
+                                        1)
+            wProcessXInputDigitalButton(u16(newController.rStick[.y] > threshhold),
+                                        &oldController.buttons[.action_down],
+                                        &newController.buttons[.action_down],
+                                        1)
+            wProcessXInputDigitalButton(u16(newController.rStick[.x] > threshhold),
+                                        &oldController.buttons[.action_left],
+                                        &newController.buttons[.action_left],
+                                        1)
+            wProcessXInputDigitalButton(u16(newController.rStick[.x] < -threshhold),
+                                        &oldController.buttons[.action_right],
+                                        &newController.buttons[.actrion_right],
+                                        1)
+            */
+              
+            { using XINPUT
+              newController.lStick[.x] = wProccesStickDeadzone(pad.sThumbLX, GAMEPAD_LEFT_THUMB_DEADZONE)
+              newController.lStick[.y] = wProccesStickDeadzone(pad.sThumbLY, GAMEPAD_LEFT_THUMB_DEADZONE)
+              newController.rStick[.x] = wProccesStickDeadzone(pad.sThumbRX, GAMEPAD_RIGHT_THUMB_DEADZONE)
+              newController.rStick[.y] = wProccesStickDeadzone(pad.sThumbRY, GAMEPAD_RIGHT_THUMB_DEADZONE)
+            }
+            
+
+
 
             /* TODO(Carbon) Does this have to be round trippy?
             vibration : XINPUT.VIBRATION 
@@ -285,6 +318,7 @@ main :: proc() {
 
           } else {
             //NOTE (Carbon): Controller is not avaliable
+            newController.isConnected = false
           }
           
           break
@@ -535,7 +569,8 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
 
 wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
                               isDown: bool) {
-  assert(keyboardState.endedDown != isDown, "function shouldn't be called unless there was a transition.")
+  //TODO(Carbon) Why is this procing when we should be stopping key repeats?
+  //assert(keyboardState.endedDown != isDown, "function shouldn't be called unless there was a transition.")
   keyboardState.endedDown = isDown;
   keyboardState.transitionCount += 1
 }
@@ -556,9 +591,9 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
       case WM_KEYUP:
         
         VKCode  := u32(message.wParam)
-        wasDown := bool(message.lParam & ( 1 << 30))
+        wasDown := bool(message.lParam & ( 1 << 30) != 0)
         isDown  := bool(message.lParam & ( 1 << 31) == 0)
-        altDown := bool(message.lParam & ( 1 << 29))
+        altDown := bool(message.lParam & ( 1 << 29) != 0)
 
         //Stop Key Repeating
         if wasDown != isDown {
@@ -573,15 +608,19 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
               wProcessKeyboardMessage(&keyboardController.buttons[.move_right], isDown)
 
             case 'Q': 
+              wProcessKeyboardMessage(&keyboardController.buttons[.shoulder_left], isDown)
             case 'E': 
+              wProcessKeyboardMessage(&keyboardController.buttons[.shoulder_right], isDown)
 
             case VK_UP:
             case VK_LEFT:
             case VK_DOWN:
             case VK_RIGHT:
             case globalControls.close:
+              wProcessKeyboardMessage(&keyboardController.buttons[.back], isDown)
               globalRunning = false
             case VK_SPACE:
+              wProcessKeyboardMessage(&keyboardController.buttons[.start], isDown)
             case VK_F4:
               if altDown do globalRunning = false
             
@@ -594,6 +633,19 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
 
     }
   }
+}
+
+wProccesStickDeadzone :: proc(stickValue: WIN32.SHORT, 
+                              deadZone: WIN32.SHORT) -> (result: f32) {
+
+  if stickValue < -deadZone {
+    result = f32(stickValue) / 32768 
+  }
+  else if stickValue > deadZone {
+    result = f32(stickValue) / 32767 
+  }
+
+  return
 }
 
 

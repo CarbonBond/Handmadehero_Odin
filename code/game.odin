@@ -39,7 +39,6 @@ game_state :: struct {
   toneMulti    : u16
 }
 
-
 game_input :: struct {
   //TODO(Carbon): Add clock value
   controllers: [5]game_controller_input
@@ -48,13 +47,6 @@ game_input :: struct {
 game_position :: enum {
   x,
   y
-}
-
-game_stick :: struct {
-  start:  [game_position]f32,
-  end:    [game_position]f32,
-  max:    [game_position]f32,
-  min:    [game_position]f32,
 }
 
 game_buttons :: enum {
@@ -77,8 +69,8 @@ game_controller_input :: struct {
   isConnected: bool,
   isAnalog:    bool,
 
-  lStick: game_stick
-  rStick: game_stick
+  lStick:[game_position]f32 
+  rStick:[game_position]f32 
 
   buttons:     [game_buttons]game_button_state
   
@@ -139,26 +131,27 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
     gameMemory.isInitialized = true
   }
 
-  input0 := gameControls.controllers[0]
-  if(input0.isAnalog) {
+  for controller in gameControls.controllers {
 
-    gameState.greenOffset += i32(5 * (input0.rStick.end[.x]))
-    gameState.blueOffset  += i32(5 * (input0.rStick.end[.y]))
+    if !controller.isConnected do continue
 
-    gameState.redOffset   += i32(1 * (input0.lStick.end[.x]))
-    gameState.toneHz      =  -u32(500 * (input0.lStick.end[.y])) + 600
+    if(controller.isAnalog) {
+      gameState.redOffset   += i32(1 * (controller.rStick[.x]))
+      gameState.toneHz      =  u32(500 * (controller.rStick[.y])) + 600
 
-  } else {
+    } else {
+      FMT.println(controller.buttons)
+    }
+
+    if controller.buttons[.move_up].endedDown { gameState.blueOffset -= 5 }
+    if controller.buttons[.move_down].endedDown { gameState.blueOffset += 5 }
+    if controller.buttons[.move_left].endedDown { gameState.greenOffset -= 5 }
+    if controller.buttons[.move_right].endedDown { gameState.greenOffset += 5 }
+
+    if controller.buttons[.action_up].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
+    if controller.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
+    if controller.buttons[.action_left].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
   }
-
-  if input0.buttons[.move_up].endedDown { gameState.blueOffset -= 500 }
-  if input0.buttons[.move_down].endedDown { gameState.blueOffset += 500 }
-  if input0.buttons[.move_left].endedDown { gameState.greenOffset -= 500 }
-  if input0.buttons[.move_right].endedDown { gameState.greenOffset += 500 }
-
-  if input0.buttons[.action_up].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
-  if input0.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
-  if input0.buttons[.action_left].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
 
   /* TODO(Carbon): Removed for the time being, figure out how to add back?
   if input0.buttons[.move_left].endedDown { lVibration = 60000}
