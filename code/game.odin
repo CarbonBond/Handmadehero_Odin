@@ -42,7 +42,7 @@ game_state :: struct {
 
 game_input :: struct {
   //TODO(Carbon): Add clock value
-  controllers: [4]game_controller_input
+  controllers: [5]game_controller_input
 }
 
 game_position :: enum {

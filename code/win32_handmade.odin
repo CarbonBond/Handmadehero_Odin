@@ -162,10 +162,12 @@ main :: proc() {
       globalRunning = true 
       for globalRunning {
 
-        keyboardController : ^game_controller_input = &newInput.controllers[0]
-        keyboardController^ = {}
+        oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
+        newKeyboardController : ^game_controller_input = &newInput.controllers[0]
 
-        wHandlePendingMessages(keyboardController)
+        for i in game_buttons {
+          newKeyboardController.buttons[i].endedDown = oldKeyboardController.buttons[i].endedDown
+        }
 
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
@@ -173,14 +175,17 @@ main :: proc() {
         if MaxControllerCount > len(newInput.controllers) { 
           MaxControllerCount = len(newInput.controllers)
         }
+
+        wHandlePendingMessages(newKeyboardController)
         
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
 
-          oldController : ^game_controller_input = &oldInput.controllers[i]
-          newController : ^game_controller_input = &newInput.controllers[i]
+          ourController := i + 1
+          oldController : ^game_controller_input = &oldInput.controllers[ourController]
+          newController : ^game_controller_input = &newInput.controllers[ourController]
           
           controller: XINPUT.STATE
-          err := XINPUT.GetState(i, &controller)
+          err := XINPUT.GetState(ourController, &controller)
 
           if err == ERROR_SUCCESS {
             //NOTE (Carbon): Controller Plugged in
@@ -530,6 +535,7 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
 
 wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
                               isDown: bool) {
+  assert(keyboardState.endedDown != isDown, "function shouldn't be called unless there was a transition.")
   keyboardState.endedDown = isDown;
   keyboardState.transitionCount += 1
 }
@@ -565,6 +571,7 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
               wProcessKeyboardMessage(&keyboardController.buttons[.move_down], isDown)
             case 'D': 
               wProcessKeyboardMessage(&keyboardController.buttons[.move_right], isDown)
+
             case 'Q': 
             case 'E': 
 
