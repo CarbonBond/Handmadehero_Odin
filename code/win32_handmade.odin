@@ -164,6 +164,8 @@ main :: proc() {
 
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
         newKeyboardController : ^game_controller_input = &newInput.controllers[0]
+        //TODO(Carbon) Keyboard should be zeroed out at this time. Assert in 
+        //             wProcessKeyboardMessage procs for some reason.
 
         newKeyboardController.isConnected = true
         for i in game_buttons {
@@ -192,7 +194,10 @@ main :: proc() {
             //NOTE (Carbon): Controller Plugged in
             pad := &controller.gamepad
 
+            if newController.lStick[.x] != 0 || newController.lStick[.y] != 0 ||
+               newController.rStick[.x] != 0 || newController.rStick[.y] != 0 {
             newController.isAnalog = true
+            }
             newController.isConnected = true
             
             /* NOT USED
