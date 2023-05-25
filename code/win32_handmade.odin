@@ -24,7 +24,6 @@ foreign gdi32 {
   - Asset loading 
   - Threading: Handle multiple threads
   - Raw input: Handle multiple keyboards)
-  - Sleep/timeBegingPeriod: Avoid full cpu spin
   - ClipCursor(): Multiple monitors
   - Fullscreen
   - WM_SETCURSOR: Show cursor
@@ -43,6 +42,7 @@ globalRunning      : bool
 globalBuffer       : w_offscreen_buffer
 globalAudio        : w_audio
 globalControls     : controls
+globalPerfCountFrequency : WIN32.LARGE_INTEGER
 
 S_OK :: WIN32.HRESULT(0)
 
@@ -92,6 +92,14 @@ main :: proc() {
   UTF16.encode_string(name_u16[:], name)
   windowClass.lpszClassName = &name_u16[0]
 
+  monitorRefreshHz := 120
+  gameRefreshHz := monitorRefreshHz / 2
+  targetSecondsPerFrame : f32 = 1 / f32(gameRefreshHz)
+
+  desiredSchedulerMS : u32 = 1
+  sleepIsGranular := (timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR )
+   
+  QueryPerformanceFrequency(&globalPerfCountFrequency)
 
   if RegisterClassW(&windowClass) != 0 {
     window: HWND = CreateWindowExW(
@@ -108,6 +116,7 @@ main :: proc() {
       instance,
       nil,
       )
+
     if window != nil  {
       //NOTE(Carbon) As we use CS_OWNDC we don't share the context 
       //             We can use one DC
@@ -147,12 +156,7 @@ main :: proc() {
       gameMemory.transientStorage = MEM.ptr_offset(cast(^u8)(gameMemory.permanentStorage),
                                                        gameMemory.permanentStorageSize)
 
-      prevCounter : LARGE_INTEGER
-      QueryPerformanceCounter(&prevCounter)
-      
-      perfCountFrequency : LARGE_INTEGER
-      QueryPerformanceFrequency(&perfCountFrequency)
-
+      prevCounter := wGetWallClock()
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
       inputs : [2]game_input
@@ -366,21 +370,25 @@ main :: proc() {
         newInput = oldInput
         oldInput = temp
 
-        endCyclesCount : i64 = INTRINSICS.read_cycle_counter()
-        endCounter : LARGE_INTEGER 
-        QueryPerformanceCounter(&endCounter)
-        
-        counterElapsed:= u64(endCounter - prevCounter) //NOTE Keep at end
-        milliSecondsPerFrame := f64(counterElapsed * 1000) / f64(perfCountFrequency)
-        cyclesElapsed := endCyclesCount - prevCyclesCount
+        secondsElapsedForFrame := wGetSecondsElapsed(prevCounter, wGetWallClock()) //NOTE Keep at end before sleep
+
+        if secondsElapsedForFrame < targetSecondsPerFrame {
+          for secondsElapsedForFrame < targetSecondsPerFrame {
+            if sleepIsGranular {
+              sleepMS : DWORD = cast(DWORD)(1000 * f32(targetSecondsPerFrame - secondsElapsedForFrame))
+              Sleep(sleepMS)
+            }
+            secondsElapsedForFrame = wGetSecondsElapsed(prevCounter, wGetWallClock())
+          }
+        } else { 
+          //TODO(Carbon): Log
+        }
 
         when #config(PRINT, true) { //TODO(Carbon): Better logging system
-          FMT.println("FPS: ", 1000.0/f64(milliSecondsPerFrame), " | Miliseconds: ", milliSecondsPerFrame,
-                      " | MegaCycles:", f64(cyclesElapsed) / (1000000))
-                    }
+        }
 
-        prevCounter = endCounter
-        prevCyclesCount = endCyclesCount
+        prevCyclesCount = INTRINSICS.read_cycle_counter()
+        prevCounter = wGetWallClock() 
       }
     } else {
       HELPER.MessageBox("Create Window Fail!", "Handmade Hero")
@@ -391,6 +399,16 @@ main :: proc() {
       HELPER.MessageBox("Register Class Fail!", "Handmade Hero")
   //TODO(Carbon) Uses custom logging if RegisterClass failed
   }
+}
+
+wGetSecondsElapsed :: proc(start, end: WIN32.LARGE_INTEGER) -> (result: f32) {
+  result = f32(f32(end - start) / f32(globalPerfCountFrequency))
+  return
+}
+
+wGetWallClock :: proc() -> (result: WIN32.LARGE_INTEGER) {
+  WIN32.QueryPerformanceCounter(&result)
+  return
 }
 
 wWindowCallback :: proc "std" (window: WIN32.HWND  , message: WIN32.UINT,

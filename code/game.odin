@@ -140,7 +140,6 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
       gameState.toneHz      =  u32(500 * (controller.rStick[.y])) + 600
 
     } else {
-      FMT.println(controller.buttons)
     }
 
     if controller.buttons[.move_up].endedDown { gameState.blueOffset -= 5 }
