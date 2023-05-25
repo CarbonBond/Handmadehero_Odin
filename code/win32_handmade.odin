@@ -35,6 +35,10 @@ foreign gdi32 {
 
 */
 
+//TESTING 
+playbackTime := 1.0
+//END TESTING
+
 
 // TODO(Carbon) Change from global
 @private
@@ -93,8 +97,8 @@ main :: proc() {
   windowClass.lpszClassName = &name_u16[0]
 
   monitorRefreshHz := 120
-  gameRefreshHz := monitorRefreshHz / 2
-  targetSecondsPerFrame : f32 = 1 / f32(gameRefreshHz)
+  gameUpdateHz := monitorRefreshHz / 2
+  targetSecondsPerFrame : f32 = 1 / f32(gameUpdateHz)
 
   desiredSchedulerMS : u32 = 1
   sleepIsGranular := (timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR )
@@ -340,27 +344,30 @@ main :: proc() {
         colorBuffer.height = globalBuffer.height
         colorBuffer.pitch  = globalBuffer.pitch
 
-
+        //Padding is how much valid data is queued up in the sound buffer
+        //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
         bufferPadding: u32
         globalAudio.client->GetCurrentPadding(&bufferPadding)
-        //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
-
-        nFramesToWrite := ((globalAudio.bufferSizeFrames / 72 ) - bufferPadding)
-
         soundBuffer : game_sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
-        soundBuffer.sampleCount = u32(nFramesToWrite)
-
-        buffer: ^i16
-        globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
-        if nFramesToWrite > 0 {
-          MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite * 4))
-        }
-
-        globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
+        //TODO(Carbon) figure out how the constant below effects buffer with 
+        //             a displayblable debug.
+        nFramesToWrite := u32((int(globalAudio.bufferSizeFrames) / 15 ) - int(bufferPadding))
+        soundBuffer.sampleCount = int(nFramesToWrite)
 
         gameUpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
+
+        {
+          buffer: ^i16
+          globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
+
+          if nFramesToWrite > 0 {
+            MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite * 4))
+          }
+
+          globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
+        }
 
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
@@ -385,6 +392,7 @@ main :: proc() {
         }
 
         when #config(PRINT, true) { //TODO(Carbon): Better logging system
+          //Locked frame time: FMT.println(wGetSecondsElapsed(prevCounter, wGetWallClock()))
         }
 
         prevCyclesCount = INTRINSICS.read_cycle_counter()
@@ -515,7 +523,7 @@ wWindowDemensions :: proc "std" (window : WIN32.HWND) -> (width, height: i32) {
 }
 
 
-wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 41000) -> bool {
+wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 48000) -> bool {
 
       hr := WIN32.CoInitializeEx(nil, WIN32.COINIT.SPEED_OVER_MEMORY)
 

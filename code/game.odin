@@ -89,9 +89,9 @@ game_offscreen_buffer :: struct {
 }
 
 game_sound_output_buffer :: struct {
-  samples : ^i16
+  samples : [^]i16
   samplesPerSecond: u32
-  sampleCount: u32
+  sampleCount: int
 }
 
 //Global for now
@@ -170,12 +170,10 @@ outputSound :: proc(gameState: ^game_state, soundBuffer: ^game_sound_output_buff
   wavePeriod := soundBuffer.samplesPerSecond/gameState.toneHz
   buffer     := soundBuffer.samples 
 
-  for frameIndex := 0; frameIndex < int(soundBuffer.sampleCount); frameIndex += 1 {
+  for frameIndex := 0; frameIndex < soundBuffer.sampleCount * 2; frameIndex += 2 {
     amp := f64(gameState.toneVolume) * MATH.sin(gameState.playbackTime) * f64(gameState.toneMulti) 
-    buffer^ = i16(amp)
-    buffer = MEM.ptr_offset(buffer, 1)
-    buffer^ = i16(amp)
-    buffer = MEM.ptr_offset(buffer, 1)
+    buffer[frameIndex] = i16(amp)
+    buffer[frameIndex + 1] = i16(amp)
     gameState.playbackTime += 6.28 / f64(wavePeriod)
   }
 }
