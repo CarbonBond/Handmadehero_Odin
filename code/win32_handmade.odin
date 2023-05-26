@@ -352,18 +352,20 @@ main :: proc() {
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
         //TODO(Carbon) figure out how the constant below effects buffer with 
-        //             a displayblable debug.
-        nFramesToWrite := u32((int(globalAudio.bufferSizeFrames) / 15 ) - int(bufferPadding))
+        //             a displayblable debug. Seems That we need a fairly high 
+        //             audio latency
+        nFramesToWrite :=  u32(f32(soundBuffer.samplesPerSecond) * targetSecondsPerFrame ) * 2 
         soundBuffer.sampleCount = int(nFramesToWrite)
 
         gameUpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
 
         {
-          buffer: ^i16
-          globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
+          buffer: ^i8
+          hr := globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
+          FMT.printf("%x\n", u32(hr))
 
-          if nFramesToWrite > 0 {
-            MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite * 4))
+          if nFramesToWrite > 0 && buffer != nil{
+            MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite) * 4)
           }
 
           globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
