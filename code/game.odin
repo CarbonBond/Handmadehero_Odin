@@ -103,7 +103,6 @@ game_sound_output_buffer :: struct {
 // TODO: Controls, Bitmap, Sound Buffer
 gameUpdateAndRender :: proc(gameMemory:   ^game_memory, 
                         colorBuffer : ^game_offscreen_buffer, 
-                        soundBuffer:  ^game_sound_output_buffer,
                         gameControls: ^game_input) {
                         //TODO(Carbon): Pass Time
 
@@ -161,20 +160,27 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
   */
 
   renderWeirdGradiant(colorBuffer, gameState.greenOffset, gameState.blueOffset, gameState.redOffset)
-
-  //TODO(Carbon) Allow sample offsets
-  outputSound(gameState, soundBuffer)
 }
 
-outputSound :: proc(gameState: ^game_state, soundBuffer: ^game_sound_output_buffer) {
-  wavePeriod := soundBuffer.samplesPerSecond/gameState.toneHz
+gameGetSoundSamples :: proc( memory: ^game_memory, soundBuffer: ^game_sound_output_buffer) {
+  gameState := cast(^game_state) memory.permanentStorage
+  gameOutputSound(soundBuffer, gameState.toneHz, 
+                  gameState.toneVolume, gameState.toneMulti,
+                  &gameState.playbackTime)
+}
+
+gameOutputSound :: proc(soundBuffer: ^game_sound_output_buffer, 
+                        toneHz: u32, toneVolume, toneMulti: u16,
+                        playbackTime: ^f64) {
+
+  wavePeriod := soundBuffer.samplesPerSecond/toneHz
   buffer     := soundBuffer.samples 
 
   for frameIndex := 0; frameIndex < soundBuffer.sampleCount * 2; frameIndex += 2 {
-    amp := f64(gameState.toneVolume) * MATH.sin(gameState.playbackTime) * f64(gameState.toneMulti) 
+    amp := f64(toneVolume) * MATH.sin(playbackTime^) * f64(toneMulti) 
     buffer[frameIndex] = i16(amp)
     buffer[frameIndex + 1] = i16(amp)
-    gameState.playbackTime += 6.28 / f64(wavePeriod)
+    playbackTime^ += 6.28 / f64(wavePeriod)
   }
 }
 

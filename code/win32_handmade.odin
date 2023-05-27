@@ -344,23 +344,23 @@ main :: proc() {
         colorBuffer.height = globalBuffer.height
         colorBuffer.pitch  = globalBuffer.pitch
 
+
+        gameUpdateAndRender(&gameMemory, &colorBuffer, newInput)
+
         //Padding is how much valid data is queued up in the sound buffer
         //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
         bufferPadding: u32
         globalAudio.client->GetCurrentPadding(&bufferPadding)
         nFramesToWrite := globalAudio.bufferSizeFrames - bufferPadding
         //nFramesToWrite :=  u32(f32(soundBuffer.samplesPerSecond) * targetSecondsPerFrame * 1.1)  
-
         soundBuffer : game_sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
-
+        soundBuffer.sampleCount = int(nFramesToWrite)
+        gameGetSoundSamples(&gameMemory, &soundBuffer) 
         //TODO(Carbon) figure out how the constant below effects buffer with 
         //             a displayblable debug. Seems That we need a fairly high 
         //             audio latency
-        soundBuffer.sampleCount = int(nFramesToWrite)
-
-        gameUpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
 
         { //Write audio to buffer
           buffer: ^i8
@@ -562,6 +562,9 @@ wInitAudio :: proc(audio: ^w_audio) -> bool {
       /*NOTE(Carbon): Trying GetMixFormat causes audio to not play.
       mix_format : ^WASAPI.WAVEFORMATEX
       audio.client->GetMixFormat(&mix_format)
+      
+      This is the recommended thing to do, but I can't seem to get it to work
+      correctly.
       */
 
       mix_format: WASAPI.WAVEFORMATEX = {
