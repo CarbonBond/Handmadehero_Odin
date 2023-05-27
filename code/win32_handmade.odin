@@ -43,6 +43,7 @@ playbackTime := 1.0
 // TODO(Carbon) Change from global
 @private
 globalRunning      : bool
+globalPause        : bool
 globalBuffer       : w_offscreen_buffer
 globalAudio        : w_audio
 globalControls     : controls
@@ -337,13 +338,13 @@ main :: proc() {
           break
         }
 
+        if globalPause do continue
         
         colorBuffer : game_offscreen_buffer
         colorBuffer.memory = globalBuffer.memory
         colorBuffer.width  = globalBuffer.width
         colorBuffer.height = globalBuffer.height
         colorBuffer.pitch  = globalBuffer.pitch
-
 
         gameUpdateAndRender(&gameMemory, &colorBuffer, newInput)
 
@@ -670,7 +671,12 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
               wProcessKeyboardMessage(&keyboardController.buttons[.start], isDown)
             case VK_F4:
               if altDown do globalRunning = false
-            
+
+            case 'P':
+              when #config(INTERNAL, true) do globalPause = true 
+            case 'C':
+              when #config(INTERNAL, true) do globalPause = false
+
           }
         }
 
