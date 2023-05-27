@@ -560,8 +560,7 @@ AUDCLNT_SESSIONFLAGS_DISPLAY_HIDE            :: 0x20000000
 AUDCLNT_SESSIONFLAGS_DISPLAY_HIDEWHENEXPIRED :: 0x40000000 
 
 
-// Below was supplied by fendevel as I don't know enough about UUID stuff 
-// Src: https://github.com/fendevel/odin-wasapi/blob/main/wasapi.odin
+// ******************** GUID *********************
 
 CLSCTX_ALL :: WIN32.CLSCTX_INPROC_SERVER | WIN32.CLSCTX_INPROC_HANDLER | WIN32.CLSCTX_LOCAL_SERVER | WIN32.CLSCTX_REMOTE_SERVER
 CLSID_MMDeviceEnumerator := WIN32.GUID{0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}}

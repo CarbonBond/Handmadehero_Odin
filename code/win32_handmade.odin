@@ -55,7 +55,7 @@ w_audio :: struct {
   renderClient: ^WASAPI.IAudioRenderClient
   safetyBytes: int
   samplesPerSecond: u32
-  bytesPerSample: int
+  bytesPerSample: u16
   bufferSizeFrames: u32
 }
 
@@ -348,21 +348,23 @@ main :: proc() {
         //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
         bufferPadding: u32
         globalAudio.client->GetCurrentPadding(&bufferPadding)
+        nFramesToWrite := globalAudio.bufferSizeFrames - bufferPadding
+        //nFramesToWrite :=  u32(f32(soundBuffer.samplesPerSecond) * targetSecondsPerFrame * 1.1)  
+
         soundBuffer : game_sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
+
         //TODO(Carbon) figure out how the constant below effects buffer with 
         //             a displayblable debug. Seems That we need a fairly high 
         //             audio latency
-        nFramesToWrite :=  u32(f32(soundBuffer.samplesPerSecond) * targetSecondsPerFrame ) * 2 
         soundBuffer.sampleCount = int(nFramesToWrite)
 
         gameUpdateAndRender(&gameMemory, &colorBuffer, &soundBuffer, newInput)
 
-        {
+        { //Write audio to buffer
           buffer: ^i8
-          hr := globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
-          FMT.printf("%x\n", u32(hr))
+          globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
 
           if nFramesToWrite > 0 && buffer != nil{
             MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite) * 4)
@@ -525,9 +527,10 @@ wWindowDemensions :: proc "std" (window : WIN32.HWND) -> (width, height: i32) {
 }
 
 
-wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 48000) -> bool {
+wInitAudio :: proc(audio: ^w_audio) -> bool {
 
       hr := WIN32.CoInitializeEx(nil, WIN32.COINIT.SPEED_OVER_MEMORY)
+      if hr != S_OK { return false }
 
       deviceEnumerator : ^WASAPI.IMMDeviceEnumerator
       hr = WIN32.CoCreateInstance(
@@ -537,38 +540,45 @@ wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 48000) -> bool {
         WASAPI.IMMDeviceEnumerator_UUID,
         cast(^rawptr)&deviceEnumerator,
       )
-
       if hr != S_OK { return false }
+      defer deviceEnumerator->Release()
 
+      //TODO (Carbon): Change this to device collection so users can choose 
+      //               what audio device they want to use.
+      //TODO(Carbon):  Use property stope to get name for device/s
       audioDevice: ^WASAPI.IMMDevice
       hr = deviceEnumerator->GetDefaultAudioEndpoint(WASAPI.EDataFlow.eRender,
                                                       WASAPI.ERole.eConsole,
                                                       &audioDevice)
       if hr != S_OK { return false }
+      defer audioDevice->Release()
 
-      deviceEnumerator->Release()
       hr = audioDevice->Activate(WASAPI.IAudioClient2_UUID,
                                   WASAPI.CLSCTX_ALL, nil
                                   cast(^rawptr)&audio.client)
-      
       if hr != S_OK { return false }
 
-      audioDevice->Release()
+
+      /*NOTE(Carbon): Trying GetMixFormat causes audio to not play.
+      mix_format : ^WASAPI.WAVEFORMATEX
+      audio.client->GetMixFormat(&mix_format)
+      */
 
       mix_format: WASAPI.WAVEFORMATEX = {
         wFormatTag      = 1, // WAVE_FORMAT_PCM, as we only need two channel
         nChannels       = 2,  
-        nSamplesPerSec  = samplesPerSec,
+        nSamplesPerSec  = 48000,
         wBitsPerSample  = 16,
         nBlockAlign     = 2 * 16 / 8, // nChannel * wBitsPerSample / 8 bits
-        nAvgBytesPerSec = samplesPerSec * 2 * 16 / 8, //nSamplesPerSec * nBlockAlign
+        nAvgBytesPerSec = 48000 * 2 * 16 / 8, //nSamplesPerSec * nBlockAlign
       }
 
       init_stream_flags : u32 = WASAPI.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                           WASAPI.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY|
                           WASAPI.AUDCLNT_STREAMFLAGS_RATEADJUST
 
-      REFTIMES_PER_SEC :: 8 * 1_000_000 // Milliseconds
+
+      REFTIMES_PER_SEC :: 1000 //every milisecond?
       requested_buffer_duration: i64 = REFTIMES_PER_SEC
       hr = audio.client->Initialize(WASAPI.AUDCLNT_SHAREMODE.SHARED,
                                     init_stream_flags,
@@ -581,8 +591,9 @@ wInitAudio :: proc(audio: ^w_audio, samplesPerSec: u32 = 48000) -> bool {
       hr = audio.client->GetService(WASAPI.IAudioRenderClient_UUID,
                                    cast(^rawptr)&audio.renderClient)
 
-      audio.samplesPerSecond = samplesPerSec 
-      audio.bytesPerSample   = 16
+      audio.samplesPerSecond = mix_format.nSamplesPerSec
+      audio.bytesPerSample   = mix_format.wBitsPerSample / 8
+
       defaultPeriod: WASAPI.REFERENCE_TIME
       minPeriod: WASAPI.REFERENCE_TIME
       audio.client->GetDevicePeriod(&defaultPeriod, &minPeriod)
