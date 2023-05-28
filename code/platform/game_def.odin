@@ -2,6 +2,12 @@ package main
 
 import DLIB       "core:dynlib"
 
+/*TODO(Brandon)
+Figure out a better way to handle definitions of 
+types so I don't have to edit this file and 
+the game file.
+*/
+
 /* NOTE(Carbon) Compiler flags
   
 SLOW:
@@ -98,16 +104,6 @@ game_sound_output_buffer :: struct {
   samplesPerSecond: u32
   sampleCount: int
 }
-
-game_code :: struct {
-  gameCodeDLL: DLIB.Library
-  UpdateAndRender : proc(gameMemory:   ^game_memory, 
-                         colorBuffer : ^game_offscreen_buffer, 
-                         gameControls: ^game_input) 
-  GetSoundSamples : proc( memory: ^game_memory, 
-                          soundBuffer: ^game_sound_output_buffer) 
-}
-
 
 empty_UpdateAndRender :: proc(gameMemory:   ^game_memory, 
                         colorBuffer : ^game_offscreen_buffer, 

@@ -173,10 +173,10 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
-      game := wLoadGameCode()
 
       globalRunning = true 
       for globalRunning {
+        game := wLoadGameCode()
 
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
         newKeyboardController : ^game_controller_input = &newInput.controllers[0]
@@ -409,6 +409,8 @@ main :: proc() {
 
         prevCyclesCount = INTRINSICS.read_cycle_counter()
         prevCounter = wGetWallClock() 
+
+        wUnloadGameCode(&game)
       }
     } else {
       HELPER.MessageBox("Create Window Fail!", "Handmade Hero")
@@ -708,17 +710,30 @@ wProccesStickDeadzone :: proc(stickValue: WIN32.SHORT,
   return
 }
 
+game_code :: struct {
+  isValid         : bool
+  library         : DLIB.Library
+
+  UpdateAndRender : proc(gameMemory:   ^game_memory, 
+                         colorBuffer : ^game_offscreen_buffer, 
+                         gameControls: ^game_input) 
+  GetSoundSamples : proc( memory: ^game_memory, 
+                          soundBuffer: ^game_sound_output_buffer) 
+}
+
+
 wLoadGameCode :: proc() -> game_code {
 
   result : game_code
   lib, ok := DLIB.load_library("game.dll")
+  result.isValid = ok
   if ok {
-    result.gameCodeDLL = lib
+    result.library = lib
     tmp := DLIB.symbol_address( lib, "gameUpdateAndRender")
     result.UpdateAndRender = cast( proc(gameMemory:   ^game_memory, 
                                       colorBuffer : ^game_offscreen_buffer, 
                                       gameControls: ^game_input))tmp
-    tmp = DLIB.symbol_address( lib, "gameUpdateAndRender")
+    tmp = DLIB.symbol_address( lib, "gameGetSoundSamples")
     result.GetSoundSamples = cast( proc( memory: ^game_memory, 
                                        soundBuffer: ^game_sound_output_buffer))tmp
   } else {
@@ -726,6 +741,14 @@ wLoadGameCode :: proc() -> game_code {
     result.GetSoundSamples = empty_GetSoundSamples
   }
   return result
+}
+
+wUnloadGameCode :: proc(gameCode: ^game_code) {
+
+  DLIB.unload_library(gameCode.library)
+  gameCode.isValid = false
+  gameCode.UpdateAndRender = empty_UpdateAndRender
+  gameCode.GetSoundSamples = empty_GetSoundSamples
 }
 
 
