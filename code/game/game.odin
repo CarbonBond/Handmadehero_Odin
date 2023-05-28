@@ -20,6 +20,12 @@ PRINT:
 
 */
 
+//DEFINITION FOR DEBUG FUNCTIONS
+
+DEBUG_read_file_result :: struct {
+  contentsSize: u32
+  contents: rawptr
+}
 
 game_memory :: struct {
   isInitialized        : bool
@@ -27,6 +33,13 @@ game_memory :: struct {
   permanentStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
   transientStorageSize : u64
   transientStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
+
+  debug_platformReadEntireFile: proc(filename: string) -> (
+                                    DEBUG_read_file_result, bool)
+  debug_platformWriteEntireFile: proc(filename: string, memorySize: u32,
+                                      memory: rawptr) -> bool 
+
+  debug_platformFreeFileMemory: proc(memory: rawptr)  
 }
 
 game_state :: struct {
@@ -101,6 +114,7 @@ game_sound_output_buffer :: struct {
 
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
+@export
 gameUpdateAndRender :: proc(gameMemory:   ^game_memory, 
                         colorBuffer : ^game_offscreen_buffer, 
                         gameControls: ^game_input) {
@@ -115,11 +129,11 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
   if !gameMemory.isInitialized {
 
     filename := #file
-    file, success := DEBUG_platformReadEntireFile(filename)
+    file, success := gameMemory.debug_platformReadEntireFile(filename)
     if success {
       // NOTE(Carbon) testing this by writting this file.
       //DEBUG_platformWriteEntireFile("./test.out", file.contentsSize, file.contents )
-      DEBUG_platformFreeFileMemory(file.contents)
+      gameMemory.debug_platformFreeFileMemory(file.contents)
     }
 
     gameState.playbackTime = 1
@@ -162,6 +176,7 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
   renderWeirdGradiant(colorBuffer, gameState.greenOffset, gameState.blueOffset, gameState.redOffset)
 }
 
+@export
 gameGetSoundSamples :: proc( memory: ^game_memory, soundBuffer: ^game_sound_output_buffer) {
   gameState := cast(^game_state) memory.permanentStorage
   gameOutputSound(soundBuffer, gameState.toneHz, 
@@ -169,6 +184,7 @@ gameGetSoundSamples :: proc( memory: ^game_memory, soundBuffer: ^game_sound_outp
                   &gameState.playbackTime)
 }
 
+@private
 gameOutputSound :: proc(soundBuffer: ^game_sound_output_buffer, 
                         toneHz: u32, toneVolume, toneMulti: u16,
                         playbackTime: ^f64) {
@@ -184,6 +200,7 @@ gameOutputSound :: proc(soundBuffer: ^game_sound_output_buffer,
   }
 }
 
+@private
 renderWeirdGradiant :: proc  (bitmap: ^game_offscreen_buffer,
                                greenOffset, blueOffset, redOffset: i32) {
 

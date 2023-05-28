@@ -3,13 +3,15 @@ package main
 import MATH       "core:math"
 import FMT        "core:fmt"
 import UTF16      "core:unicode/utf16"
+import DLIB       "core:dynlib"
+
 import WIN32      "core:sys/windows"
 import MEM        "core:mem"
 import INTRINSICS "core:intrinsics"
 
-import XINPUT  "./xinput" 
-import WASAPI  "./audio/wasapi"
-import HELPER  "./helper"
+import XINPUT  "../xinput" 
+import WASAPI  "../audio/wasapi"
+import HELPER  "../helper"
 
 foreign import gdi32 "system:Gdi32.lib"
 foreign gdi32 {
@@ -148,6 +150,9 @@ main :: proc() {
       gameMemory : game_memory 
       gameMemory.permanentStorageSize = HELPER.megabytes(64);
       gameMemory.transientStorageSize = HELPER.gigabytes(4);
+      gameMemory.debug_platformReadEntireFile =  DEBUG_platformReadEntireFile
+      gameMemory.debug_platformWriteEntireFile = DEBUG_platformWriteEntireFile
+      gameMemory.debug_platformFreeFileMemory =  DEBUG_platformFreeFileMemory
 
       totalSize := gameMemory.transientStorageSize + gameMemory.permanentStorageSize
 
@@ -167,6 +172,8 @@ main :: proc() {
       inputs : [2]game_input
       newInput := &inputs[0]
       oldInput := &inputs[1]
+
+      game := wLoadGameCode()
 
       globalRunning = true 
       for globalRunning {
@@ -346,7 +353,7 @@ main :: proc() {
         colorBuffer.height = globalBuffer.height
         colorBuffer.pitch  = globalBuffer.pitch
 
-        gameUpdateAndRender(&gameMemory, &colorBuffer, newInput)
+        game.UpdateAndRender(&gameMemory, &colorBuffer, newInput)
 
         //Padding is how much valid data is queued up in the sound buffer
         //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
@@ -358,7 +365,7 @@ main :: proc() {
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
         soundBuffer.sampleCount = int(nFramesToWrite)
-        gameGetSoundSamples(&gameMemory, &soundBuffer) 
+        game.GetSoundSamples(&gameMemory, &soundBuffer) 
         //TODO(Carbon) figure out how the constant below effects buffer with 
         //             a displayblable debug. Seems That we need a fairly high 
         //             audio latency
@@ -699,6 +706,26 @@ wProccesStickDeadzone :: proc(stickValue: WIN32.SHORT,
   }
 
   return
+}
+
+wLoadGameCode :: proc() -> game_code {
+
+  result : game_code
+  lib, ok := DLIB.load_library("game.dll")
+  if ok {
+    result.gameCodeDLL = lib
+    tmp := DLIB.symbol_address( lib, "gameUpdateAndRender")
+    result.UpdateAndRender = cast( proc(gameMemory:   ^game_memory, 
+                                      colorBuffer : ^game_offscreen_buffer, 
+                                      gameControls: ^game_input))tmp
+    tmp = DLIB.symbol_address( lib, "gameUpdateAndRender")
+    result.GetSoundSamples = cast( proc( memory: ^game_memory, 
+                                       soundBuffer: ^game_sound_output_buffer))tmp
+  } else {
+    result.UpdateAndRender = empty_UpdateAndRender
+    result.GetSoundSamples = empty_GetSoundSamples
+  }
+  return result
 }
 
 

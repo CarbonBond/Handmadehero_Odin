@@ -3,3 +3,5 @@
 *.sln
 */.vs/
 .vs/
+.dll
+.exp
