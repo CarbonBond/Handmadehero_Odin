@@ -4,6 +4,7 @@ import MATH       "core:math"
 import FMT        "core:fmt"
 import UTF16      "core:unicode/utf16"
 import DLIB       "core:dynlib"
+import OS         "core:os"
 
 import WIN32      "core:sys/windows"
 import MEM        "core:mem"
@@ -173,10 +174,17 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
+      srcName := "./build/game.dll"
+      game := wLoadGameCode(srcName)
+
 
       globalRunning = true 
       for globalRunning {
-        game := wLoadGameCode()
+        lastWriteTime, er := OS.last_write_time_by_name(srcName) 
+        if game.lastWriteTime != lastWriteTime {
+          wUnloadGameCode(&game)
+          game = wLoadGameCode(srcName)
+        }
 
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
         newKeyboardController : ^game_controller_input = &newInput.controllers[0]
@@ -410,7 +418,6 @@ main :: proc() {
         prevCyclesCount = INTRINSICS.read_cycle_counter()
         prevCounter = wGetWallClock() 
 
-        wUnloadGameCode(&game)
       }
     } else {
       HELPER.MessageBox("Create Window Fail!", "Handmade Hero")
@@ -713,6 +720,7 @@ wProccesStickDeadzone :: proc(stickValue: WIN32.SHORT,
 game_code :: struct {
   isValid         : bool
   library         : DLIB.Library
+  lastWriteTime   : OS.File_Time
 
   UpdateAndRender : proc(gameMemory:   ^game_memory, 
                          colorBuffer : ^game_offscreen_buffer, 
@@ -722,12 +730,29 @@ game_code :: struct {
 }
 
 
-wLoadGameCode :: proc() -> game_code {
+wLoadGameCode :: proc(srcName: string) -> game_code {
 
   result : game_code
-  lib, ok := DLIB.load_library("game.dll")
-  result.isValid = ok
+  lastWriteTime, er := OS.last_write_time_by_name(srcName) 
+  result.lastWriteTime = lastWriteTime
+
+  destName := "./build/game_temp.dll"
+
+  //TODO(Carbon): Have to create tmp pdb files for debugger hot reloading.
+  //NOTE(Carbon): Have to constantly read file until is succeed. For some reason
+  //              it likes to not work. See if you can get CopyFileExW to work.
+  success := false 
+  dll : []u8
+  for !success {
+    dll, success = OS.read_entire_file_from_filename(srcName)
+    FMT.println(success)
+  }
+  OS.write_entire_file("./build/game_temp.dll", dll, true)
+
+
+  lib, ok:= DLIB.load_library("./build/game_temp.dll")
   if ok {
+    result.isValid = true 
     result.library = lib
     tmp := DLIB.symbol_address( lib, "gameUpdateAndRender")
     result.UpdateAndRender = cast( proc(gameMemory:   ^game_memory, 
