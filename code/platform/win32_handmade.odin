@@ -77,6 +77,7 @@ controls :: struct {
   close : u32
 }
 
+
 main :: proc() {
   using WIN32
 
@@ -84,7 +85,33 @@ main :: proc() {
     globalControls.close = VK_ESCAPE
   //Controls Test end
 
-  instance := cast(HINSTANCE)GetModuleHandleA(nil)
+  instance := cast(HINSTANCE)GetModuleHandleW(nil)
+  fileName_w : [255]u16
+  GetModuleFileNameW(nil, cast(^u16)&fileName_w[0], len(fileName_w))
+
+  filePath_a : [255]u8
+  WideCharToMultiByte(CP_UTF8, 0, cast(^u16)&fileName_w[0]
+                      len(fileName_w), cast(^u8)&filePath_a[0], len(filePath_a), nil, nil)
+
+  onePastLastSlash := 0
+  for item, index in filePath_a {
+    if item == '\\' {
+      onePastLastSlash = index + 1
+    }
+  }
+  for i := onePastLastSlash; i < len(filePath_a); i += 1 {
+    filePath_a[i] = 0
+  }
+
+  dllFile := "game.dll"
+  dllFileFullPath : [255]u8
+  catU8( filePath_a[:], transmute([]u8)dllFile, dllFileFullPath[:])
+
+  dllTempFile := "game_temp.dll"
+  dllTempFileFullPath : [255]u8
+  catU8( filePath_a[:], transmute([]u8)dllTempFile, dllTempFileFullPath[:])
+
+  FMT.println(string(dllTempFileFullPath[:]), string(dllFileFullPath[:]))
 
   wResizeDIBSection(&globalBuffer, 1280, 720)
 
@@ -174,16 +201,14 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
-      srcName := "./build/game.dll"
-      game := wLoadGameCode(srcName)
-
+      game := wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
 
       globalRunning = true 
       for globalRunning {
-        lastWriteTime, er := OS.last_write_time_by_name(srcName) 
+        lastWriteTime, er := OS.last_write_time_by_name(string(dllFileFullPath[:])) 
         if game.lastWriteTime != lastWriteTime {
           wUnloadGameCode(&game)
-          game = wLoadGameCode(srcName)
+          game = wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
         }
 
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
@@ -730,13 +755,11 @@ game_code :: struct {
 }
 
 
-wLoadGameCode :: proc(srcName: string) -> game_code {
+wLoadGameCode :: proc(dllName, dllTempName: string) -> game_code {
 
   result : game_code
-  lastWriteTime, er := OS.last_write_time_by_name(srcName) 
+  lastWriteTime, er := OS.last_write_time_by_name(dllName) 
   result.lastWriteTime = lastWriteTime
-
-  destName := "./build/game_temp.dll"
 
   //TODO(Carbon): Have to create tmp pdb files for debugger hot reloading.
   //NOTE(Carbon): Have to constantly read file until is succeed. For some reason
@@ -744,13 +767,12 @@ wLoadGameCode :: proc(srcName: string) -> game_code {
   success := false 
   dll : []u8
   for !success {
-    dll, success = OS.read_entire_file_from_filename(srcName)
-    FMT.println(success)
+    dll, success = OS.read_entire_file_from_filename(dllName)
   }
-  OS.write_entire_file("./build/game_temp.dll", dll, true)
+  OS.write_entire_file(dllTempName, dll, true)
 
 
-  lib, ok:= DLIB.load_library("./build/game_temp.dll")
+  lib, ok:= DLIB.load_library(dllTempName)
   if ok {
     result.isValid = true 
     result.library = lib
@@ -870,4 +892,16 @@ when #config(INTERNAL, true) {
     return result 
   }
 
+  catU8 :: proc(start, end, buffer: []u8) {
+    index := 0
+    for letter in start {
+      buffer[index] = letter
+      index += 1
+      if start[index] == 0 do break
+    }
+    for letter in end {
+      buffer[index] = letter
+      index += 1
+    }
+  }
 }
