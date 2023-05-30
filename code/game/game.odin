@@ -27,6 +27,7 @@ DEBUG_read_file_result :: struct {
   contents: rawptr
 }
 
+
 game_memory :: struct {
   isInitialized        : bool
   permanentStorageSize : u64
@@ -50,6 +51,8 @@ game_state :: struct {
   toneHz       : u32
   toneVolume   : u16
   toneMulti    : u16
+
+  playerPosition: [game_position]f32
 }
 
 game_input :: struct {
@@ -138,10 +141,13 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
 
     gameState.playbackTime = 1
     gameState.toneHz      = 450
-    gameState.toneVolume  = 500
-    gameState.toneMulti   = 1
+    gameState.toneVolume  = 100
+    gameState.toneMulti   = 0
 
     gameMemory.isInitialized = true
+
+    gameState.playerPosition[.x] = 100
+    gameState.playerPosition[.y] = 100
   }
 
   for controller in gameControls.controllers {
@@ -152,13 +158,16 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
       gameState.redOffset   += i32(1 * (controller.rStick[.x]))
       gameState.toneHz      =  u32(500 * (controller.rStick[.y])) + 600
 
+      gameState.playerPosition[.x] += (5 * (controller.lStick[.x]))
+      gameState.playerPosition[.y] += (5 * (controller.lStick[.y]))
+      FMT.println(gameState.playerPosition)
     } else {
-    }
-
     if controller.buttons[.move_up].endedDown { gameState.blueOffset -= 5 }
     if controller.buttons[.move_down].endedDown { gameState.blueOffset += 5 }
     if controller.buttons[.move_left].endedDown { gameState.greenOffset -= 5 }
     if controller.buttons[.move_right].endedDown { gameState.greenOffset += 5 }
+    }
+
 
     if controller.buttons[.action_up].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
     if controller.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
@@ -174,6 +183,7 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
   */
 
   renderWeirdGradiant(colorBuffer, gameState.greenOffset, gameState.blueOffset, gameState.redOffset)
+  renderFakePlayer(colorBuffer, gameState.playerPosition)
 }
 
 @export
@@ -197,6 +207,23 @@ gameOutputSound :: proc(soundBuffer: ^game_sound_output_buffer,
     buffer[frameIndex] = i16(amp)
     buffer[frameIndex + 1] = i16(amp)
     playbackTime^ += 6.28 / f64(wavePeriod)
+  }
+}
+
+@private
+renderFakePlayer :: proc  (bitmap: ^game_offscreen_buffer, 
+                           position: [game_position]f32) {
+
+  bitmapMemoryArray := bitmap.memory[:]
+  size : i32 = 10
+  row : i32 = i32(position[.y]) * bitmap.pitch 
+  for y : i32 = i32(position[.y]); y < i32(position[.y]) + size; y += 1 {
+    pixel := row + i32(position[.x])
+    for x : i32 = i32(position[.x]); x < i32(position[.x]) + size; x += 1 {
+      bitmapMemoryArray[pixel] = 0xFFFFFFFF 
+      pixel += 1
+    }
+    row += bitmap.pitch
   }
 }
 

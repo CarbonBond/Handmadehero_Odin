@@ -355,9 +355,9 @@ main :: proc() {
               
             { using XINPUT
               newController.lStick[.x] = wProccesStickDeadzone(pad.sThumbLX, GAMEPAD_LEFT_THUMB_DEADZONE)
-              newController.lStick[.y] = wProccesStickDeadzone(pad.sThumbLY, GAMEPAD_LEFT_THUMB_DEADZONE)
+              newController.lStick[.y] = -wProccesStickDeadzone(pad.sThumbLY, GAMEPAD_LEFT_THUMB_DEADZONE)
               newController.rStick[.x] = wProccesStickDeadzone(pad.sThumbRX, GAMEPAD_RIGHT_THUMB_DEADZONE)
-              newController.rStick[.y] = wProccesStickDeadzone(pad.sThumbRY, GAMEPAD_RIGHT_THUMB_DEADZONE)
+              newController.rStick[.y] = -wProccesStickDeadzone(pad.sThumbRY, GAMEPAD_RIGHT_THUMB_DEADZONE)
             }
             
 
