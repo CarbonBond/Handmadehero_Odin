@@ -54,6 +54,14 @@ platform_state :: struct {
   perfCountFrequency : WIN32.LARGE_INTEGER
 }
 
+recording_state :: struct {
+  recordingHandle: WIN32.HANDLE
+  inputRecordingIndex : int
+
+  playbackHandle: WIN32.HANDLE
+  inputPlayingIndex : int
+}
+
 S_OK :: WIN32.HRESULT(0)
 
 w_audio :: struct {
@@ -113,8 +121,6 @@ main :: proc() {
   dllTempFile := "game_temp.dll"
   dllTempFileFullPath : [255]u8
   catU8( filePath_a[:], transmute([]u8)dllTempFile, dllTempFileFullPath[:])
-
-  FMT.println(string(dllTempFileFullPath[:]), string(dllFileFullPath[:]))
 
   wResizeDIBSection(&globalState.buffer, 1280, 720)
 
@@ -204,8 +210,7 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
-      inputRecordingIndex := 0
-      inputPlayingIndex := 0
+      recordingState : recording_state
 
       game := wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
 
@@ -234,7 +239,7 @@ main :: proc() {
           MaxControllerCount = len(newInput.controllers) - 1
         }
 
-        wHandlePendingMessages(&globalState, newKeyboardController)
+        wHandlePendingMessages(&recordingState, newKeyboardController)
         
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
 
@@ -392,6 +397,13 @@ main :: proc() {
         colorBuffer.height = globalState.buffer.height
         colorBuffer.pitch  = globalState.buffer.pitch
 
+        if recordingState.inputRecordingIndex != 0 {
+          wInputRecord(&recordingState, newInput)
+        }
+        if recordingState.inputPlayingIndex != 0 {
+          wInputPlayback(&recordingState, newInput)
+        }
+
         game.UpdateAndRender(&gameMemory, &colorBuffer, newInput)
 
         //Padding is how much valid data is queued up in the sound buffer
@@ -458,6 +470,69 @@ main :: proc() {
   } else {
       HELPER.MessageBox("Register Class Fail!", "Handmade Hero")
   //TODO(Carbon) Uses custom logging if RegisterClass failed
+  }
+}
+
+wInputBeginRecording :: proc(state: ^recording_state, 
+                             inputRecordingIndex : int,
+                             filename: string = "input_recording.igmr"){
+  using WIN32
+
+  state.inputRecordingIndex = inputRecordingIndex
+
+  filename_w: [dynamic]u16
+  append(&filename_w, 0)
+  for letter in filename{
+    append(&filename_w, 0)
+  }
+  UTF16.encode_string(filename_w[:], filename)
+
+  state.recordingHandle = CreateFileW( &filename_w[0], GENERIC_WRITE, 
+                                       0, nil, CREATE_ALWAYS, 0, nil)
+}
+wInputEndRecording :: proc(state: ^recording_state){
+  WIN32.CloseHandle(state.recordingHandle)
+  state.inputRecordingIndex = 0
+}
+
+wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
+  using WIN32
+  bytesWritten : DWORD
+  WriteFile(state.recordingHandle, newInput, size_of(newInput), &bytesWritten, nil)
+  if bytesWritten < size_of(newInput) do FMT.println("SizeDif")
+}
+
+wInputBeginPlayback :: proc(state: ^recording_state,
+                            inputPlayingIndex: int,
+                            filename: string = "input_recording.igmr"){
+  using WIN32
+
+  state.inputPlayingIndex = inputPlayingIndex
+
+  filename_w: [dynamic]u16
+  append(&filename_w, 0)
+  for letter in filename{
+    append(&filename_w, 0)
+  }
+  UTF16.encode_string(filename_w[:], filename)
+
+  state.playbackHandle = CreateFileW( &filename_w[0], GENERIC_READ, FILE_SHARE_READ,
+  nil, OPEN_EXISTING, 0, nil)
+}
+
+wInputEndPlayback :: proc(state: ^recording_state) {
+  WIN32.CloseHandle(state.playbackHandle)
+  state.inputPlayingIndex = 0
+}
+
+wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input ) {
+  using WIN32
+  bytesRead : DWORD
+  result := ReadFile(state.playbackHandle, newInput, size_of(newInput), &bytesRead, nil)
+  if !result {
+    playingIndex := state.inputPlayingIndex
+    wInputEndPlayback(state)
+    wInputBeginPlayback(state, playingIndex)
   }
 }
 
@@ -670,7 +745,7 @@ wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
   keyboardState.transitionCount += 1
 }
 
-wHandlePendingMessages :: proc(state: ^platform_state,
+wHandlePendingMessages :: proc(recordingState: ^recording_state,
                                keyboardController: ^game_controller_input) {
   using WIN32 
    
@@ -707,6 +782,16 @@ wHandlePendingMessages :: proc(state: ^platform_state,
               wProcessKeyboardMessage(&keyboardController.buttons[.shoulder_left], isDown)
             case 'E': 
               wProcessKeyboardMessage(&keyboardController.buttons[.shoulder_right], isDown)
+
+            case 'L':
+              if isDown {
+                if recordingState.inputRecordingIndex == 0 {
+                  wInputBeginRecording(recordingState, 1)
+                } else {
+                  wInputEndRecording(recordingState)
+                  wInputBeginPlayback(recordingState, 1)
+                }
+              }
 
             case VK_UP:
             case VK_LEFT:
@@ -829,7 +914,6 @@ when #config(INTERNAL, true) {
     }
 
     UTF16.encode_string(filename_w[:], filename)
-
     fileHandle := CreateFileW( &filename_w[0], GENERIC_READ, FILE_SHARE_READ,
                                 nil, OPEN_EXISTING, 0, nil)
 

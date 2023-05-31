@@ -160,7 +160,6 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
 
       gameState.playerPosition[.x] += (5 * (controller.lStick[.x]))
       gameState.playerPosition[.y] += (5 * (controller.lStick[.y]))
-      FMT.println(gameState.playerPosition)
     } else {
     if controller.buttons[.move_up].endedDown { gameState.blueOffset -= 5 }
     if controller.buttons[.move_down].endedDown { gameState.blueOffset += 5 }
