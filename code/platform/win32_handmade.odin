@@ -52,6 +52,7 @@ platform_state :: struct {
   audio        : w_audio
   controls     : controls
   perfCountFrequency : WIN32.LARGE_INTEGER
+  filepath     : string
 }
 
 recording_state :: struct {
@@ -113,6 +114,8 @@ main :: proc() {
   for i := onePastLastSlash; i < len(filePath_a); i += 1 {
     filePath_a[i] = 0
   }
+
+  globalState.filepath = string(filePath_a[:])
 
   dllFile := "game.dll"
   dllFileFullPath : [255]u8
@@ -401,7 +404,10 @@ main :: proc() {
           wInputRecord(&recordingState, newInput)
         }
         if recordingState.inputPlayingIndex != 0 {
-          wInputPlayback(&recordingState, newInput)
+          recordingFile := "data/input_recording.igmr"
+          recordingFileFullPath : [255]u8
+          catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
+          wInputPlayback(&recordingState, newInput, string(recordingFileFullPath[:]))
         }
 
         game.UpdateAndRender(&gameMemory, &colorBuffer, newInput)
@@ -475,7 +481,7 @@ main :: proc() {
 
 wInputBeginRecording :: proc(state: ^recording_state, 
                              inputRecordingIndex : int,
-                             filename: string = "input_recording.igmr"){
+                             filename: string){
   using WIN32
 
   state.inputRecordingIndex = inputRecordingIndex
@@ -504,7 +510,7 @@ wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
 
 wInputBeginPlayback :: proc(state: ^recording_state,
                             inputPlayingIndex: int,
-                            filename: string = "input_recording.igmr"){
+                            filename: string  ){
   using WIN32
 
   state.inputPlayingIndex = inputPlayingIndex
@@ -525,14 +531,15 @@ wInputEndPlayback :: proc(state: ^recording_state) {
   state.inputPlayingIndex = 0
 }
 
-wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input ) {
+wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input, filepath: string ) {
   using WIN32
   bytesRead : DWORD
   result := ReadFile(state.playbackHandle, newInput, size_of(newInput), &bytesRead, nil)
   if !result {
     playingIndex := state.inputPlayingIndex
     wInputEndPlayback(state)
-    wInputBeginPlayback(state, playingIndex)
+
+    wInputBeginPlayback(state, playingIndex, filepath)
   }
 }
 
@@ -785,11 +792,16 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
 
             case 'L':
               if isDown {
+                recordingFile := "data/input_recording.igmr"
+                recordingFileFullPath : [255]u8
+                catU8( transmute([]u8)globalState.filepath, 
+                       transmute([]u8)recordingFile, recordingFileFullPath[:])
+
                 if recordingState.inputRecordingIndex == 0 {
-                  wInputBeginRecording(recordingState, 1)
+                  wInputBeginRecording(recordingState, 1, string(recordingFileFullPath[:]))
                 } else {
                   wInputEndRecording(recordingState)
-                  wInputBeginPlayback(recordingState, 1)
+                  wInputBeginPlayback(recordingState, 1, string(recordingFileFullPath[:]))
                 }
               }
 
@@ -983,6 +995,7 @@ when #config(INTERNAL, true) {
     return result 
   }
 
+  //Change to catString
   catU8 :: proc(start, end, buffer: []u8) {
     index := 0
     for letter in start {
