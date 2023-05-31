@@ -141,7 +141,7 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
 
     gameState.playbackTime = 1
     gameState.toneHz      = 450
-    gameState.toneVolume  = 100
+    gameState.toneVolume  = 0
     gameState.toneMulti   = 0
 
     gameMemory.isInitialized = true
@@ -169,9 +169,10 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
     }
 
 
-    if controller.buttons[.action_up].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
-    if controller.buttons[.action_down].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
-    if controller.buttons[.action_left].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
+    if controller.buttons[.action_right].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
+    if controller.buttons[.action_left].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
+    if controller.buttons[.action_down].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
+    if controller.buttons[.action_up].endedDown { gameState.playerPosition[.y] -= 10} 
   }
 
   /* TODO(Carbon): Removed for the time being, figure out how to add back?

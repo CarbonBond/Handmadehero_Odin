@@ -45,12 +45,14 @@ playbackTime := 1.0
 
 // TODO(Carbon) Change from global
 @private
-globalRunning      : bool
-globalPause        : bool
-globalBuffer       : w_offscreen_buffer
-globalAudio        : w_audio
-globalControls     : controls
-globalPerfCountFrequency : WIN32.LARGE_INTEGER
+platform_state :: struct {
+  running      : bool
+  pause        : bool
+  buffer       : w_offscreen_buffer
+  audio        : w_audio
+  controls     : controls
+  perfCountFrequency : WIN32.LARGE_INTEGER
+}
 
 S_OK :: WIN32.HRESULT(0)
 
@@ -77,12 +79,13 @@ controls :: struct {
   close : u32
 }
 
+globalState : platform_state
 
 main :: proc() {
   using WIN32
 
   //Rebinding Controls test
-    globalControls.close = VK_ESCAPE
+    globalState.controls.close = VK_ESCAPE
   //Controls Test end
 
   instance := cast(HINSTANCE)GetModuleHandleW(nil)
@@ -113,7 +116,7 @@ main :: proc() {
 
   FMT.println(string(dllTempFileFullPath[:]), string(dllFileFullPath[:]))
 
-  wResizeDIBSection(&globalBuffer, 1280, 720)
+  wResizeDIBSection(&globalState.buffer, 1280, 720)
 
   windowClass :               WNDCLASSW
   windowClass.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC
@@ -134,7 +137,7 @@ main :: proc() {
   desiredSchedulerMS : u32 = 1
   sleepIsGranular := (timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR )
    
-  QueryPerformanceFrequency(&globalPerfCountFrequency)
+  QueryPerformanceFrequency(&globalState.perfCountFrequency)
 
   if RegisterClassW(&windowClass) != 0 {
     window: HWND = CreateWindowExW(
@@ -159,11 +162,11 @@ main :: proc() {
 
       //NOTE(Carbon): TESTING WASAPI 
 
-      audioSuccess := wInitAudio(&globalAudio)
+      audioSuccess := wInitAudio(&globalState.audio)
 
       samples := cast(^i16) VirtualAlloc(
          nil,
-         uint(globalAudio.bufferSizeFrames) * uint(globalAudio.bytesPerSample) * 2 ,
+         uint(globalState.audio.bufferSizeFrames) * uint(globalState.audio.bytesPerSample) * 2 ,
          MEM_RESERVE | MEM_COMMIT,
          PAGE_READWRITE,
       )
@@ -201,10 +204,13 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
+      inputRecordingIndex := 0
+      inputPlayingIndex := 0
+
       game := wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
 
-      globalRunning = true 
-      for globalRunning {
+      globalState.running = true 
+      for globalState.running {
         lastWriteTime, er := OS.last_write_time_by_name(string(dllFileFullPath[:])) 
         if game.lastWriteTime != lastWriteTime {
           wUnloadGameCode(&game)
@@ -228,7 +234,7 @@ main :: proc() {
           MaxControllerCount = len(newInput.controllers) - 1
         }
 
-        wHandlePendingMessages(newKeyboardController)
+        wHandlePendingMessages(&globalState, newKeyboardController)
         
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
 
@@ -281,7 +287,7 @@ main :: proc() {
             //The pressed buttons:
 
             if bool(pad.wButtons & XINPUT.GAMEPAD_BACK ) {
-              globalRunning = false
+              globalState.running = false
             }
 
             //Dpad overwriting thumbsticks incase of use
@@ -378,25 +384,25 @@ main :: proc() {
           break
         }
 
-        if globalPause do continue
+        if globalState.pause do continue
         
         colorBuffer : game_offscreen_buffer
-        colorBuffer.memory = globalBuffer.memory
-        colorBuffer.width  = globalBuffer.width
-        colorBuffer.height = globalBuffer.height
-        colorBuffer.pitch  = globalBuffer.pitch
+        colorBuffer.memory = globalState.buffer.memory
+        colorBuffer.width  = globalState.buffer.width
+        colorBuffer.height = globalState.buffer.height
+        colorBuffer.pitch  = globalState.buffer.pitch
 
         game.UpdateAndRender(&gameMemory, &colorBuffer, newInput)
 
         //Padding is how much valid data is queued up in the sound buffer
         //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
         bufferPadding: u32
-        globalAudio.client->GetCurrentPadding(&bufferPadding)
-        nFramesToWrite := globalAudio.bufferSizeFrames - bufferPadding
+        globalState.audio.client->GetCurrentPadding(&bufferPadding)
+        nFramesToWrite := globalState.audio.bufferSizeFrames - bufferPadding
         //nFramesToWrite :=  u32(f32(soundBuffer.samplesPerSecond) * targetSecondsPerFrame * 1.1)  
         soundBuffer : game_sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
-        soundBuffer.samplesPerSecond = globalAudio.samplesPerSecond 
+        soundBuffer.samplesPerSecond = globalState.audio.samplesPerSecond 
         soundBuffer.sampleCount = int(nFramesToWrite)
         game.GetSoundSamples(&gameMemory, &soundBuffer) 
         //TODO(Carbon) figure out how the constant below effects buffer with 
@@ -405,17 +411,17 @@ main :: proc() {
 
         { //Write audio to buffer
           buffer: ^i8
-          globalAudio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
+          globalState.audio.renderClient->GetBuffer(nFramesToWrite, cast(^^BYTE)&buffer)
 
           if nFramesToWrite > 0 && buffer != nil{
             MEM.copy(buffer, soundBuffer.samples, int(nFramesToWrite) * 4)
           }
 
-          globalAudio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
+          globalState.audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
         }
 
         windowWidth, windowHeight  := wWindowDemensions(window)
-        wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
+        wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalState.buffer)
         ReleaseDC(window, deviceContext)
 
         temp: ^game_input = newInput
@@ -456,7 +462,7 @@ main :: proc() {
 }
 
 wGetSecondsElapsed :: proc(start, end: WIN32.LARGE_INTEGER) -> (result: f32) {
-  result = f32(f32(end - start) / f32(globalPerfCountFrequency))
+  result = f32(f32(end - start) / f32(globalState.perfCountFrequency))
   return
 }
 
@@ -481,11 +487,11 @@ wWindowCallback :: proc "std" (window: WIN32.HWND  , message: WIN32.UINT,
     //             Learn about odin's contexts
 
     case WM_DESTROY:
-      globalRunning = false
+      globalState.running = false
       //TODO(Carbon) Handle as an error?
 
     case WM_CLOSE:
-      globalRunning = false
+      globalState.running = false
       //TODO(Carbon) Possibly message/warn user.
 
     case WM_ACTIVATEAPP:
@@ -499,7 +505,7 @@ wWindowCallback :: proc "std" (window: WIN32.HWND  , message: WIN32.UINT,
       width  :=  paint.rcPaint.right  - paint.rcPaint.left
 
       windowWidth, windowHeight := wWindowDemensions(window)  
-      wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalBuffer)
+      wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalState.buffer)
       EndPaint(window, &paint)
 
       
@@ -664,7 +670,8 @@ wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
   keyboardState.transitionCount += 1
 }
 
-wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
+wHandlePendingMessages :: proc(state: ^platform_state,
+                               keyboardController: ^game_controller_input) {
   using WIN32 
    
   message: MSG
@@ -672,7 +679,7 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
 
     switch message.message {
       case WM_QUIT: 
-        globalRunning = false;
+        globalState.running = false;
          
       case WM_SYSKEYDOWN: fallthrough
       case WM_SYSKEYUP: fallthrough
@@ -705,18 +712,18 @@ wHandlePendingMessages :: proc(keyboardController: ^game_controller_input) {
             case VK_LEFT:
             case VK_DOWN:
             case VK_RIGHT:
-            case globalControls.close:
+            case globalState.controls.close:
               wProcessKeyboardMessage(&keyboardController.buttons[.back], isDown)
-              globalRunning = false
+              globalState.running = false
             case VK_SPACE:
               wProcessKeyboardMessage(&keyboardController.buttons[.start], isDown)
             case VK_F4:
-              if altDown do globalRunning = false
+              if altDown do globalState.running = false
 
             case 'P':
-              when #config(INTERNAL, true) do globalPause = true 
+              when #config(INTERNAL, true) do globalState.pause = true 
             case 'C':
-              when #config(INTERNAL, true) do globalPause = false
+              when #config(INTERNAL, true) do globalState.pause = false
 
           }
         }
