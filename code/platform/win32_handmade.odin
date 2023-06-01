@@ -61,6 +61,8 @@ recording_state :: struct {
 
   playbackHandle: WIN32.HANDLE
   inputPlayingIndex : int
+
+  fileLocation: string
 }
 
 S_OK :: WIN32.HRESULT(0)
@@ -214,6 +216,10 @@ main :: proc() {
       oldInput := &inputs[1]
 
       recordingState : recording_state
+      recordingFile := "data\\input_recording.igmr"
+      recordingFileFullPath : [255]u8
+      catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
+      recordingState.fileLocation = string(recordingFileFullPath[:])
 
       game := wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
 
@@ -227,8 +233,7 @@ main :: proc() {
 
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
         newKeyboardController : ^game_controller_input = &newInput.controllers[0]
-        //TODO(Carbon) Keyboard should be zeroed out at this time. Assert in 
-        //             wProcessKeyboardMessage procs for some reason.
+        newKeyboardController^ = game_controller_input{}
 
         newKeyboardController.isConnected = true
         for i in game_buttons {
@@ -404,10 +409,7 @@ main :: proc() {
           wInputRecord(&recordingState, newInput)
         }
         if recordingState.inputPlayingIndex != 0 {
-          recordingFile := "data/input_recording.igmr"
-          recordingFileFullPath : [255]u8
-          catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
-          wInputPlayback(&recordingState, newInput, string(recordingFileFullPath[:]))
+          wInputPlayback(&recordingState, newInput, recordingState.fileLocation)
         }
 
         game.UpdateAndRender(&gameMemory, &colorBuffer, newInput)
@@ -504,8 +506,7 @@ wInputEndRecording :: proc(state: ^recording_state){
 wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
   using WIN32
   bytesWritten : DWORD
-  WriteFile(state.recordingHandle, newInput, size_of(newInput), &bytesWritten, nil)
-  if bytesWritten < size_of(newInput) do FMT.println("SizeDif")
+  WriteFile(state.recordingHandle, newInput, size_of(newInput^), &bytesWritten, nil)
 }
 
 wInputBeginPlayback :: proc(state: ^recording_state,
@@ -534,11 +535,10 @@ wInputEndPlayback :: proc(state: ^recording_state) {
 wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input, filepath: string ) {
   using WIN32
   bytesRead : DWORD
-  result := ReadFile(state.playbackHandle, newInput, size_of(newInput), &bytesRead, nil)
-  if !result {
+  result := ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
+  if bytesRead < size_of(newInput^) {
     playingIndex := state.inputPlayingIndex
     wInputEndPlayback(state)
-
     wInputBeginPlayback(state, playingIndex, filepath)
   }
 }
@@ -747,7 +747,7 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
 wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
                               isDown: bool) {
   //TODO(Carbon) Why is this procing when we should be stopping key repeats?
-  //assert(keyboardState.endedDown != isDown, "function shouldn't be called unless there was a transition.")
+  assert(keyboardState.endedDown != isDown, "function shouldn't be called unless there was a transition.")
   keyboardState.endedDown = isDown;
   keyboardState.transitionCount += 1
 }
@@ -792,16 +792,11 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
 
             case 'L':
               if isDown {
-                recordingFile := "data/input_recording.igmr"
-                recordingFileFullPath : [255]u8
-                catU8( transmute([]u8)globalState.filepath, 
-                       transmute([]u8)recordingFile, recordingFileFullPath[:])
-
                 if recordingState.inputRecordingIndex == 0 {
-                  wInputBeginRecording(recordingState, 1, string(recordingFileFullPath[:]))
+                  wInputBeginRecording(recordingState, 1, recordingState.fileLocation)
                 } else {
                   wInputEndRecording(recordingState)
-                  wInputBeginPlayback(recordingState, 1, string(recordingFileFullPath[:]))
+                  wInputBeginPlayback(recordingState, 1, recordingState.fileLocation)
                 }
               }
 
