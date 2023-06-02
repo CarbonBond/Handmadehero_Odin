@@ -167,7 +167,6 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
     if controller.buttons[.move_right].endedDown { gameState.greenOffset += 5 }
     }
 
-
     if controller.buttons[.action_right].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
     if controller.buttons[.action_left].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
     if controller.buttons[.action_down].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }

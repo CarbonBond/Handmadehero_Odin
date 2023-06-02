@@ -43,7 +43,7 @@ playbackTime := 1.0
 //END TESTING
 
 
-// TODO(Carbon) Change from global
+// TODO(Carbon) Combined platform_state and recording_state
 @private
 platform_state :: struct {
   running      : bool
@@ -56,13 +56,16 @@ platform_state :: struct {
 }
 
 recording_state :: struct {
-  recordingHandle: WIN32.HANDLE
+  gameMemoryBlock     : rawptr
+  totalBlockSize      : u64
+
+  recordingHandle     : WIN32.HANDLE
   inputRecordingIndex : int
 
-  playbackHandle: WIN32.HANDLE
-  inputPlayingIndex : int
+  playbackHandle      : WIN32.HANDLE
+  inputPlayingIndex   : int
 
-  fileLocation: string
+  fileLocation        : string
 }
 
 S_OK :: WIN32.HRESULT(0)
@@ -130,7 +133,7 @@ main :: proc() {
   wResizeDIBSection(&globalState.buffer, 1280, 720)
 
   windowClass :               WNDCLASSW
-  windowClass.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC
+  windowClass.style         = CS_HREDRAW | CS_VREDRAW 
   windowClass.lpfnWndProc   = wWindowCallback
   windowClass.hInstance     = instance
   /*TODO(Carbon) Set Icon
@@ -152,7 +155,7 @@ main :: proc() {
 
   if RegisterClassW(&windowClass) != 0 {
     window: HWND = CreateWindowExW(
-      0,
+      WS_EX_TOPMOST | WS_EX_LAYERED,
       windowClass.lpszClassName,
       &name_u16[0],
       WS_OVERLAPPEDWINDOW|WS_VISIBLE,
@@ -167,9 +170,6 @@ main :: proc() {
       )
 
     if window != nil  {
-      //NOTE(Carbon) As we use CS_OWNDC we don't share the context 
-      //             We can use one DC
-      deviceContext := GetDC(window)
 
       //NOTE(Carbon): TESTING WASAPI 
 
@@ -189,22 +189,28 @@ main :: proc() {
         baseAddress : LPVOID = nil
       }
 
+      recordingState : recording_state
+      recordingFile := "data\\input_recording.igmr"
+      recordingFileFullPath : [255]u8
+      catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
+      recordingState.fileLocation = string(recordingFileFullPath[:])
+
+
       gameMemory : game_memory 
       gameMemory.permanentStorageSize = HELPER.megabytes(64);
-      gameMemory.transientStorageSize = HELPER.gigabytes(4);
+      gameMemory.transientStorageSize = HELPER.megabytes(501);
       gameMemory.debug_platformReadEntireFile =  DEBUG_platformReadEntireFile
       gameMemory.debug_platformWriteEntireFile = DEBUG_platformWriteEntireFile
       gameMemory.debug_platformFreeFileMemory =  DEBUG_platformFreeFileMemory
 
       totalSize := gameMemory.transientStorageSize + gameMemory.permanentStorageSize
+      recordingState.totalBlockSize = totalSize
+      recordingState.gameMemoryBlock = VirtualAlloc( baseAddress,
+                                                     uint(totalSize),
+                                                     MEM_RESERVE | MEM_COMMIT,
+                                                     PAGE_READWRITE)
 
-      gameMemory.permanentStorage = VirtualAlloc(
-         baseAddress,
-         uint(totalSize),
-         MEM_RESERVE | MEM_COMMIT,
-         PAGE_READWRITE,
-      )
-
+      gameMemory.permanentStorage = recordingState.gameMemoryBlock
       gameMemory.transientStorage = MEM.ptr_offset(cast(^u8)(gameMemory.permanentStorage),
                                                        gameMemory.permanentStorageSize)
 
@@ -214,12 +220,6 @@ main :: proc() {
       inputs : [2]game_input
       newInput := &inputs[0]
       oldInput := &inputs[1]
-
-      recordingState : recording_state
-      recordingFile := "data\\input_recording.igmr"
-      recordingFileFullPath : [255]u8
-      catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
-      recordingState.fileLocation = string(recordingFileFullPath[:])
 
       game := wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
 
@@ -440,8 +440,12 @@ main :: proc() {
           globalState.audio.renderClient->ReleaseBuffer(nFramesToWrite, 0)
         }
 
+
+        deviceContext := GetDC(window)
+
         windowWidth, windowHeight  := wWindowDemensions(window)
         wDisplayBufferInWindow(deviceContext, windowWidth, windowHeight, &globalState.buffer)
+
         ReleaseDC(window, deviceContext)
 
         temp: ^game_input = newInput
@@ -497,7 +501,15 @@ wInputBeginRecording :: proc(state: ^recording_state,
 
   state.recordingHandle = CreateFileW( &filename_w[0], GENERIC_WRITE, 
                                        0, nil, CREATE_ALWAYS, 0, nil)
+
+  bytesWritten := cast(u32)state.totalBlockSize
+  //NOTE(Carbon) windows only accepts 32 bit writes, once its larger we have to 
+  //             loop. Asserting failure for now
+  assert(u64(bytesWritten) == state.totalBlockSize)
+  WriteFile(state.recordingHandle, state.gameMemoryBlock, 
+            u32(state.totalBlockSize), &bytesWritten, nil)
 }
+
 wInputEndRecording :: proc(state: ^recording_state){
   WIN32.CloseHandle(state.recordingHandle)
   state.inputRecordingIndex = 0
@@ -525,6 +537,10 @@ wInputBeginPlayback :: proc(state: ^recording_state,
 
   state.playbackHandle = CreateFileW( &filename_w[0], GENERIC_READ, FILE_SHARE_READ,
   nil, OPEN_EXISTING, 0, nil)
+
+  bytesRead : DWORD
+  result := ReadFile(state.playbackHandle, state.gameMemoryBlock, 
+                     u32(state.totalBlockSize), &bytesRead, nil)
 }
 
 wInputEndPlayback :: proc(state: ^recording_state) {
@@ -536,7 +552,7 @@ wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input, filepath:
   using WIN32
   bytesRead : DWORD
   result := ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
-  if bytesRead < size_of(newInput^) {
+  if bytesRead < size_of(newInput^) && result {
     playingIndex := state.inputPlayingIndex
     wInputEndPlayback(state)
     wInputBeginPlayback(state, playingIndex, filepath)
@@ -577,6 +593,11 @@ wWindowCallback :: proc "std" (window: WIN32.HWND  , message: WIN32.UINT,
       //TODO(Carbon) Possibly message/warn user.
 
     case WM_ACTIVATEAPP:
+      if(bool(wParam) == true) {
+        SetLayeredWindowAttributes(window, RGB(0,0,0) , 255, 0x2) //LWA_ALPHA
+      } else {
+        SetLayeredWindowAttributes(window, RGB(0,0,0) , 70, 0x2) //LWA_ALPHA
+      }
 
     case WM_PAINT:
       paint : PAINTSTRUCT
