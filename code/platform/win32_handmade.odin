@@ -10,14 +10,15 @@ import WIN32      "core:sys/windows"
 import MEM        "core:mem"
 import INTRINSICS "core:intrinsics"
 
-import XINPUT  "../xinput" 
-import WASAPI  "../audio/wasapi"
-import HELPER  "../helper"
-
-foreign import gdi32 "system:Gdi32.lib"
-foreign gdi32 {
-    CreateCompatibleDC :: proc "stdcall" (hdc : WIN32.HDC) -> WIN32.HDC ---
+foreign import "system:kernel32.lib"
+foreign kernel32 {
+	ExitProcess :: proc "stdcall" (exit_code:  u32) ---
 }
+
+import XINPUT  "../windows_port/xinput" 
+import WASAPI  "../windows_port/audio/wasapi"
+import WINGDI  "../windows_port/wingdi/"
+import HELPER  "../helper"
 
 
 /*TODO(Carbon) Missing Functionality
@@ -143,7 +144,7 @@ main :: proc() {
   windowClass.lpszClassName = &name_u16[0]
 
   monitorRefreshHz := 120
-  gameUpdateHz := monitorRefreshHz / 2
+  gameUpdateHz := f32(monitorRefreshHz) / 2
   targetSecondsPerFrame : f32 = 1 / f32(gameUpdateHz)
 
   desiredSchedulerMS : u32 = 1
@@ -169,8 +170,13 @@ main :: proc() {
 
     if window != nil  {
 
+      refreshDC := GetDC(window)
+      wRefreshHz := WINGDI.GetDeviceCaps(refreshDC, WINGDI.VREFRESH)
+      ReleaseDC(window, refreshDC)
+      if wRefreshHz > 1 {
+        monitorRefreshHz = wRefreshHz
+      }
       //NOTE(Carbon): TESTING WASAPI 
-
       audioSuccess := wInitAudio(&globalState.audio)
 
       samples := cast(^i16) VirtualAlloc(

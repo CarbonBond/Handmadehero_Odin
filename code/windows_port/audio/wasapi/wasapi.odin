@@ -2,7 +2,6 @@ package wasapi
 
 import WIN32  "core:sys/windows"
 import DXGI "vendor:directx/dxgi"
-import H "../../helper"
 import DLIB "core:dynlib"
 
 @init
@@ -14,10 +13,8 @@ init :: proc() {
   if ok {
     tmp, found := DLIB.symbol_address(lib, "")
     if found {
-      H.MessageBox("lib loaded", "Handmade")
     }
   } else { 
-    H.MessageBox("NOT loaded", "Handmade")
   }
 }
 
