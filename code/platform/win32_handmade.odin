@@ -155,7 +155,7 @@ main :: proc() {
 
   if RegisterClassW(&windowClass) != 0 {
     window: HWND = CreateWindowExW(
-      WS_EX_TOPMOST | WS_EX_LAYERED,
+      WS_EX_LAYERED,
       windowClass.lpszClassName,
       &name_u16[0],
       WS_OVERLAPPEDWINDOW|WS_VISIBLE,
@@ -190,7 +190,7 @@ main :: proc() {
       }
 
       recordingState : recording_state
-      recordingFile := "data\\input_recording.igmr"
+      recordingFile := "temp\\input_recording.igmr"
       recordingFileFullPath : [255]u8
       catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
       recordingState.fileLocation = string(recordingFileFullPath[:])
@@ -205,6 +205,7 @@ main :: proc() {
 
       totalSize := gameMemory.transientStorageSize + gameMemory.permanentStorageSize
       recordingState.totalBlockSize = totalSize
+      //TODO(Carbon): Use MEM_LARGE_PADGE and call adjust toekn privileges
       recordingState.gameMemoryBlock = VirtualAlloc( baseAddress,
                                                      uint(totalSize),
                                                      MEM_RESERVE | MEM_COMMIT,
@@ -262,11 +263,13 @@ main :: proc() {
             //NOTE (Carbon): Controller Plugged in
             pad := &controller.gamepad
 
+            newController.isConnected = true
+            newController.isAnalog = oldController.isAnalog
+
             if newController.lStick[.x] != 0 || newController.lStick[.y] != 0 ||
                newController.rStick[.x] != 0 || newController.rStick[.y] != 0 {
             newController.isAnalog = true
             }
-            newController.isConnected = true
             
             /* NOT USED
             //buttonStart     := bool(pad.wButtons & XINPUT.GAMEPAD_START)
@@ -556,6 +559,7 @@ wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input, filepath:
     playingIndex := state.inputPlayingIndex
     wInputEndPlayback(state)
     wInputBeginPlayback(state, playingIndex, filepath)
+    ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
   }
 }
 
@@ -655,11 +659,9 @@ wDisplayBufferInWindow :: proc "std" (deviceContext: WIN32.HDC,
   //TODO(Carbon) Play with stretch modes.
   WIN32.StretchDIBits(
     deviceContext,
-    /*
-    x, y, width, height,
-    x, y, width, height,
-    */
-    0, 0, windowWidth, windowHeight,
+    //0, 0, windowWidth, windowHeight, 
+    //NOTE(Carbon) Doing direct mapping for 1 to 1 pixels while coding renderer
+    0, 0, bitmap.width, bitmap.height,
     0, 0, bitmap.width, bitmap.height,
     bitmap.memory,
     &bitmap.info,
