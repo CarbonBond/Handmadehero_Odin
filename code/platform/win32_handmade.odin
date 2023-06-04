@@ -123,12 +123,10 @@ main :: proc() {
   globalState.filepath = string(filePath_a[:])
 
   dllFile := "game.dll"
-  dllFileFullPath : [255]u8
-  catU8( filePath_a[:], transmute([]u8)dllFile, dllFileFullPath[:])
+  dllFileFullPath := catString( globalState.filepath, dllFile)
 
   dllTempFile := "game_temp.dll"
-  dllTempFileFullPath : [255]u8
-  catU8( filePath_a[:], transmute([]u8)dllTempFile, dllTempFileFullPath[:])
+  dllTempFileFullPath := catString(globalState.filepath, dllTempFile)
 
   wResizeDIBSection(&globalState.buffer, 1280, 720)
 
@@ -191,9 +189,8 @@ main :: proc() {
 
       recordingState : recording_state
       recordingFile := "temp\\input_recording.igmr"
-      recordingFileFullPath : [255]u8
-      catU8( filePath_a[:], transmute([]u8)recordingFile, recordingFileFullPath[:])
-      recordingState.fileLocation = string(recordingFileFullPath[:])
+      recordingFileFullPath := catString( globalState.filepath, recordingFile)
+      recordingState.fileLocation = recordingFileFullPath
 
 
       gameMemory : game_memory 
@@ -222,14 +219,14 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
-      game := wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
+      game := wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
 
       globalState.running = true 
       for globalState.running {
-        lastWriteTime, er := OS.last_write_time_by_name(string(dllFileFullPath[:])) 
+        lastWriteTime, er := OS.last_write_time_by_name(dllFileFullPath)
         if game.lastWriteTime != lastWriteTime {
           wUnloadGameCode(&game)
-          game = wLoadGameCode(string(dllFileFullPath[:]), string(dllTempFileFullPath[:]))
+          game = wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
         }
 
         oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
@@ -1013,17 +1010,24 @@ when #config(INTERNAL, true) {
     return result 
   }
 
-  //Change to catString
-  catU8 :: proc(start, end, buffer: []u8) {
-    index := 0
-    for letter in start {
-      buffer[index] = letter
-      index += 1
-      if start[index] == 0 do break
-    }
-    for letter in end {
-      buffer[index] = letter
-      index += 1
-    }
-  }
 }
+catString :: proc(start, end: string) -> string {
+  start_b := transmute([]u8)start
+  end_b := transmute([]u8)end
+
+  buffer : [dynamic]u8
+  index := 0
+  for byte in start_b {
+    append(&buffer, byte)
+    index += 1
+    if start[index] == 0 do break
+  }
+  for byte in end_b {
+    append(&buffer, byte)
+    index += 1
+  }
+
+  result := string(buffer[:])
+  return result
+}
+
