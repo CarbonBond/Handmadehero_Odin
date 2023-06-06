@@ -24,6 +24,10 @@ PRINT:
 
 */
 
+thread_context :: struct {
+  placeholder :int
+}
+
 
 game_memory :: struct {
   isInitialized        : bool
@@ -32,12 +36,13 @@ game_memory :: struct {
   transientStorageSize : u64
   transientStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
 
-  debug_platformReadEntireFile: proc(filename: string) -> (
-                                    DEBUG_read_file_result, bool)
-  debug_platformWriteEntireFile: proc(filename: string, memorySize: u32,
-                                      memory: rawptr) -> bool 
+  debug_platformReadEntireFile: proc(thread: ^thread_context, filename: string) -> 
+                                    (DEBUG_read_file_result, bool)
 
-  debug_platformFreeFileMemory: proc(memory: rawptr)  
+  debug_platformWriteEntireFile: proc(thread: ^thread_context, filename: string,
+                                      memorySize: u32, memory: rawptr) -> bool 
+
+  debug_platformFreeFileMemory: proc(thread: ^thread_context, memory: rawptr)  
 }
 
 game_state :: struct {
@@ -53,6 +58,7 @@ game_state :: struct {
 game_input :: struct {
   //TODO(Carbon): Add clock value
   controllers: [5]game_controller_input
+
 }
 
 game_position :: enum {
@@ -84,7 +90,10 @@ game_controller_input :: struct {
   rStick:[game_position]f32 
 
   buttons:     [game_buttons]game_button_state
-  
+
+  //TODO(Carbon): Should I not have these hear but in game_input? 
+  mouseButtons  : [5]game_button_state
+  mouseZ, mouseX, mouseY : i32
 }
 
 game_button_state :: struct {
@@ -105,11 +114,11 @@ game_sound_output_buffer :: struct {
   sampleCount: int
 }
 
-empty_UpdateAndRender :: proc(gameMemory:   ^game_memory, 
-                        colorBuffer : ^game_offscreen_buffer, 
-                        gameControls: ^game_input) { return } 
+empty_UpdateAndRender :: proc(thread: ^thread_context, gameMemory: ^game_memory, 
+                              colorBuffer : ^game_offscreen_buffer, 
+                              gameControls: ^game_input) { return } 
 
-empty_GetSoundSamples :: proc( memory: ^game_memory, 
+empty_GetSoundSamples :: proc( thread: ^thread_context, memory: ^game_memory, 
                                soundBuffer: ^game_sound_output_buffer) 
                                { return} 
 

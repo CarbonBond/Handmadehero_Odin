@@ -251,8 +251,16 @@ main :: proc() {
           MaxControllerCount = len(newInput.controllers) - 1
         }
 
-        wHandlePendingMessages(&recordingState, newKeyboardController)
-        
+        wHandlePendingMessages(&recordingState, newKeyboardController, window)
+
+        mousePos : POINT
+        GetCursorPos(&mousePos)
+        ScreenToClient(window, &mousePos) 
+        newKeyboardController.mouseX = mousePos.x 
+        newKeyboardController.mouseY = mousePos.y
+        newKeyboardController.mouseZ = 0 
+
+
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
 
           ourController := i + 1
@@ -418,7 +426,8 @@ main :: proc() {
           wInputPlayback(&recordingState, newInput, recordingState.fileLocation)
         }
 
-        game.UpdateAndRender(&gameMemory, &colorBuffer, newInput)
+        thread : thread_context
+        game.UpdateAndRender(&thread, &gameMemory, &colorBuffer, newInput)
 
         //Padding is how much valid data is queued up in the sound buffer
         //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
@@ -430,7 +439,7 @@ main :: proc() {
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalState.audio.samplesPerSecond 
         soundBuffer.sampleCount = int(nFramesToWrite)
-        game.GetSoundSamples(&gameMemory, &soundBuffer) 
+        game.GetSoundSamples(&thread, &gameMemory, &soundBuffer) 
         //TODO(Carbon) figure out how the constant below effects buffer with 
         //             a displayblable debug. Seems That we need a fairly high 
         //             audio latency
@@ -779,16 +788,65 @@ wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
 }
 
 wHandlePendingMessages :: proc(recordingState: ^recording_state,
-                               keyboardController: ^game_controller_input) {
+                               keyboardController: ^game_controller_input,
+                               window: WIN32.HWND) {
   using WIN32 
    
+
   message: MSG
   for PeekMessageW(&message, nil, 0, 0, PM_REMOVE) {
 
     switch message.message {
       case WM_QUIT: 
         globalState.running = false;
+
+
+      case WM_LBUTTONDOWN: 
+      case WM_RBUTTONDOWN: 
+      case WM_XBUTTONDOWN: 
+      case WM_MBUTTONDOWN: 
+
+        SetCapture(window)
+
+        lmbDown     := (message.wParam & MK_LBUTTON)  != 0
+        rmbDown     := (message.wParam & MK_RBUTTON)  != 0
+        middleDown  := (message.wParam & MK_MBUTTON)  != 0
+        x1Down      := (message.wParam & MK_XBUTTON1) != 0
+        x2Down      := (message.wParam & MK_XBUTTON2) != 0
+
+        //controlDown := (wParam & MK_CONTROL)  != 0
+        //shiftDown   := (wParam & MK_SHIFT)    != 0
+
+        keyboardController.mouseButtons[0].endedDown = lmbDown
+        keyboardController.mouseButtons[1].endedDown = rmbDown
+        keyboardController.mouseButtons[2].endedDown = middleDown
+        keyboardController.mouseButtons[3].endedDown = x1Down
+        keyboardController.mouseButtons[4].endedDown = x2Down
+
+        FMT.println(keyboardController.mouseButtons[0])
          
+      case WM_LBUTTONUP: 
+      case WM_RBUTTONUP: 
+      case WM_XBUTTONUP: 
+      case WM_MBUTTONUP: 
+        lmbDown     := (message.wParam & MK_LBUTTON)  != 0
+        rmbDown     := (message.wParam & MK_RBUTTON)  != 0
+        middleDown  := (message.wParam & MK_MBUTTON)  != 0
+        x1Down      := (message.wParam & MK_XBUTTON1) != 0
+        x2Down      := (message.wParam & MK_XBUTTON2) != 0
+
+        //controlDown := (wParam & MK_CONTROL)  != 0
+        //shiftDown   := (wParam & MK_SHIFT)    != 0
+
+        keyboardController.mouseButtons[0].endedDown = lmbDown
+        keyboardController.mouseButtons[1].endedDown = rmbDown
+        keyboardController.mouseButtons[2].endedDown = middleDown
+        keyboardController.mouseButtons[3].endedDown = x1Down
+        keyboardController.mouseButtons[4].endedDown = x2Down
+
+        FMT.println(keyboardController.mouseButtons[0])
+        ReleaseCapture()
+
       case WM_SYSKEYDOWN: fallthrough
       case WM_SYSKEYUP: fallthrough
       case WM_KEYDOWN: fallthrough
@@ -825,6 +883,7 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
                   wInputBeginPlayback(recordingState, 1, recordingState.fileLocation)
                 }
               }
+
 
             case VK_UP:
             case VK_LEFT:
@@ -872,10 +931,10 @@ game_code :: struct {
   library         : DLIB.Library
   lastWriteTime   : OS.File_Time
 
-  UpdateAndRender : proc(gameMemory:   ^game_memory, 
+  UpdateAndRender : proc(thread: ^thread_context,gameMemory:   ^game_memory, 
                          colorBuffer : ^game_offscreen_buffer, 
                          gameControls: ^game_input) 
-  GetSoundSamples : proc( memory: ^game_memory, 
+  GetSoundSamples : proc(thread: ^thread_context, memory: ^game_memory, 
                           soundBuffer: ^game_sound_output_buffer) 
 }
 
@@ -902,12 +961,14 @@ wLoadGameCode :: proc(dllName, dllTempName: string) -> game_code {
     result.isValid = true 
     result.library = lib
     tmp := DLIB.symbol_address( lib, "gameUpdateAndRender")
-    result.UpdateAndRender = cast( proc(gameMemory:   ^game_memory, 
-                                      colorBuffer : ^game_offscreen_buffer, 
-                                      gameControls: ^game_input))tmp
+    result.UpdateAndRender = cast( proc(thread: ^thread_context,
+                                        gameMemory:   ^game_memory, 
+                                        colorBuffer : ^game_offscreen_buffer, 
+                                        gameControls: ^game_input))tmp
     tmp = DLIB.symbol_address( lib, "gameGetSoundSamples")
-    result.GetSoundSamples = cast( proc( memory: ^game_memory, 
-                                       soundBuffer: ^game_sound_output_buffer))tmp
+    result.GetSoundSamples = cast( proc(thread: ^thread_context,
+                                        memory: ^game_memory, 
+                                        soundBuffer: ^game_sound_output_buffer))tmp
   } else {
     result.UpdateAndRender = empty_UpdateAndRender
     result.GetSoundSamples = empty_GetSoundSamples
@@ -934,7 +995,9 @@ when #config(INTERNAL, true) {
     contents: rawptr
   }
 
-  DEBUG_platformReadEntireFile :: proc(filename: string) -> (DEBUG_read_file_result, bool) {
+  DEBUG_platformReadEntireFile :: proc(thread: ^thread_context,
+                                       filename: string) ->
+                                      (DEBUG_read_file_result, bool) {
     using WIN32
 
     result : DEBUG_read_file_result
@@ -970,7 +1033,7 @@ when #config(INTERNAL, true) {
                result.contentsSize = fileSize32
                success = true
           } else {
-            DEBUG_platformFreeFileMemory(result.contents)
+            DEBUG_platformFreeFileMemory(thread, result.contents)
             result.contents, success = nil, false
           }
         }
@@ -980,15 +1043,15 @@ when #config(INTERNAL, true) {
     return result, success
   }
 
-  DEBUG_platformFreeFileMemory :: proc(memory: rawptr) {
+  DEBUG_platformFreeFileMemory :: proc(thread: ^thread_context, memory: rawptr) {
     using WIN32
     if memory != nil do WIN32.VirtualFree(memory, 0, MEM_RELEASE)
     return
   }
 
 
-  DEBUG_platformWriteEntireFile :: proc(filename: string, memorySize: u32,
-                                        memory: rawptr) -> bool {
+  DEBUG_platformWriteEntireFile :: proc(thread: ^thread_context, filename: string,
+                                        memorySize: u32, memory: rawptr) -> bool {
     using WIN32
 
     result := false

@@ -27,6 +27,9 @@ DEBUG_read_file_result :: struct {
   contents: rawptr
 }
 
+thread_context :: struct {
+  placeholder :int
+}
 
 game_memory :: struct {
   isInitialized        : bool
@@ -35,12 +38,13 @@ game_memory :: struct {
   transientStorageSize : u64
   transientStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
 
-  debug_platformReadEntireFile: proc(filename: string) -> (
-                                    DEBUG_read_file_result, bool)
-  debug_platformWriteEntireFile: proc(filename: string, memorySize: u32,
-                                      memory: rawptr) -> bool 
+  debug_platformReadEntireFile: proc(thread: ^thread_context, filename: string) -> 
+                                    ( DEBUG_read_file_result, bool)
 
-  debug_platformFreeFileMemory: proc(memory: rawptr)  
+  debug_platformWriteEntireFile: proc(thread: ^thread_context,filename: string,
+                                      memorySize: u32, memory: rawptr) -> bool 
+
+  debug_platformFreeFileMemory: proc(thread: ^thread_context,memory: rawptr)  
 }
 
 game_state :: struct {
@@ -58,6 +62,9 @@ game_state :: struct {
 game_input :: struct {
   //TODO(Carbon): Add clock value
   controllers: [5]game_controller_input
+
+  mouseButtons  : [5]game_button_state
+  mouseZ, mouseX, mouseY : i32
 }
 
 game_position :: enum {
@@ -118,9 +125,10 @@ game_sound_output_buffer :: struct {
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
 @export
-gameUpdateAndRender :: proc(gameMemory:   ^game_memory, 
-                        colorBuffer : ^game_offscreen_buffer, 
-                        gameControls: ^game_input) {
+gameUpdateAndRender :: proc(thread: ^thread_context,
+                            gameMemory:   ^game_memory, 
+                            colorBuffer : ^game_offscreen_buffer, 
+                            gameControls: ^game_input) {
                         //TODO(Carbon): Pass Time
 
   when #config(SLOW, true) {
@@ -132,11 +140,11 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
   if !gameMemory.isInitialized {
 
     filename := #file
-    file, success := gameMemory.debug_platformReadEntireFile(filename)
+    file, success := gameMemory.debug_platformReadEntireFile(thread, filename)
     if success {
       // NOTE(Carbon) testing this by writting this file.
-      //DEBUG_platformWriteEntireFile("./test.out", file.contentsSize, file.contents )
-      gameMemory.debug_platformFreeFileMemory(file.contents)
+      //DEBUG_platformWriteEntireFile(thread, "./test.out", file.contentsSize, file.contents )
+      gameMemory.debug_platformFreeFileMemory(thread, file.contents)
     }
 
     gameState.playbackTime = 1
@@ -150,7 +158,10 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
     gameState.playerPosition[.y] = 100
   }
 
+  FMT.println(gameControls.mouseX,gameControls.mouseZ,gameControls.mouseY)
+
   for controller in gameControls.controllers {
+
 
     if !controller.isConnected do continue
 
@@ -186,7 +197,9 @@ gameUpdateAndRender :: proc(gameMemory:   ^game_memory,
 }
 
 @export
-gameGetSoundSamples :: proc( memory: ^game_memory, soundBuffer: ^game_sound_output_buffer) {
+gameGetSoundSamples :: proc(thread: ^thread_context,
+                            memory: ^game_memory,
+                            soundBuffer: ^game_sound_output_buffer) {
   gameState := cast(^game_state) memory.permanentStorage
   gameOutputSound(soundBuffer, gameState.toneHz, 
                   gameState.toneVolume, gameState.toneMulti,
