@@ -243,6 +243,9 @@ main :: proc() {
         for i in game_buttons {
           newKeyboardController.buttons[i].endedDown = oldKeyboardController.buttons[i].endedDown
         }
+        for i in mouse_buttons {
+          newKeyboardController.mouseButtons[i].endedDown = oldKeyboardController.mouseButtons[i].endedDown
+        }
 
         //TODO(Carbon) Add controller polling here
         //TODO(Carbon) Whats the best polling frequency? 
@@ -259,6 +262,8 @@ main :: proc() {
         newKeyboardController.mouseX = mousePos.x 
         newKeyboardController.mouseY = mousePos.y
         newKeyboardController.mouseZ = 0 
+
+        FMT.println(newKeyboardController.mouseButtons)
 
 
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
@@ -794,16 +799,15 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
    
 
   message: MSG
-  for PeekMessageW(&message, nil, 0, 0, PM_REMOVE) {
+  for PeekMessageW(&message, window, 0, 0, PM_REMOVE) {
 
     switch message.message {
       case WM_QUIT: 
         globalState.running = false;
 
-
-      case WM_LBUTTONDOWN: 
-      case WM_RBUTTONDOWN: 
-      case WM_XBUTTONDOWN: 
+      case WM_LBUTTONDOWN: fallthrough 
+      case WM_RBUTTONDOWN: fallthrough
+      case WM_XBUTTONDOWN: fallthrough
       case WM_MBUTTONDOWN: 
 
         SetCapture(window)
@@ -823,11 +827,10 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
         keyboardController.mouseButtons[3].endedDown = x1Down
         keyboardController.mouseButtons[4].endedDown = x2Down
 
-        FMT.println(keyboardController.mouseButtons[0])
          
-      case WM_LBUTTONUP: 
-      case WM_RBUTTONUP: 
-      case WM_XBUTTONUP: 
+      case WM_LBUTTONUP: fallthrough
+      case WM_RBUTTONUP: fallthrough
+      case WM_XBUTTONUP: fallthrough
       case WM_MBUTTONUP: 
         lmbDown     := (message.wParam & MK_LBUTTON)  != 0
         rmbDown     := (message.wParam & MK_RBUTTON)  != 0
@@ -844,7 +847,6 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
         keyboardController.mouseButtons[3].endedDown = x1Down
         keyboardController.mouseButtons[4].endedDown = x2Down
 
-        FMT.println(keyboardController.mouseButtons[0])
         ReleaseCapture()
 
       case WM_SYSKEYDOWN: fallthrough

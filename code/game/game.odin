@@ -62,9 +62,6 @@ game_state :: struct {
 game_input :: struct {
   //TODO(Carbon): Add clock value
   controllers: [5]game_controller_input
-
-  mouseButtons  : [5]game_button_state
-  mouseZ, mouseX, mouseY : i32
 }
 
 game_position :: enum {
@@ -87,6 +84,14 @@ game_buttons :: enum {
   start,
 }
 
+mouse_buttons :: enum {
+  lmb,
+  rmb,
+  middle,
+  x1,
+  x2
+}
+
 game_controller_input :: struct {
 
   isConnected: bool,
@@ -97,6 +102,8 @@ game_controller_input :: struct {
 
   buttons:     [game_buttons]game_button_state
   
+  mouseButtons  : [mouse_buttons]game_button_state
+  mouseZ, mouseX, mouseY : i32
 }
 
 game_button_state :: struct {
@@ -158,7 +165,6 @@ gameUpdateAndRender :: proc(thread: ^thread_context,
     gameState.playerPosition[.y] = 100
   }
 
-  FMT.println(gameControls.mouseX,gameControls.mouseZ,gameControls.mouseY)
 
   for controller in gameControls.controllers {
 

@@ -81,6 +81,14 @@ game_buttons :: enum {
   start,
 }
 
+mouse_buttons :: enum {
+  lmb,
+  rmb,
+  middle,
+  x1,
+  x2
+}
+
 game_controller_input :: struct {
 
   isConnected: bool,
