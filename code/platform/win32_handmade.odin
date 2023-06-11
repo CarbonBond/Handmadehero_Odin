@@ -58,9 +58,11 @@ platform_state :: struct {
 
 replay_buffer :: struct {
   fileName    : string
-  fileHandle  : WIN32.HANDLE
-  memoryMap   : WIN32.HANDLE
-  memoryBlock : rawptr
+  gameMemoryBlock : rawptr
+  inputMemoryBlock : [^]game_input
+  inputMemoryIndex : uint
+  inputMemorySize  : uint 
+  inputMemoryWritten : uint 
 }
 
 recording_state :: struct {
@@ -68,10 +70,7 @@ recording_state :: struct {
   gameMemoryBlock     : rawptr
   totalBlockSize      : u64
 
-  recordingHandle     : WIN32.HANDLE
   inputRecordingIndex : int
-
-  playbackHandle      : WIN32.HANDLE
   inputPlayingIndex   : int
 
   replayBuffers       : [4]replay_buffer
@@ -226,27 +225,13 @@ main :: proc() {
         recordingFile := FMT.bprintf(stringBuffer[:], "temp\\input_recording_%d.igmr", i) 
         replayBuffer.fileName = catString( globalState.filepath, recordingFile)
 
-        replayFileName : [dynamic]u16
-        append(&replayFileName, 0)
-        for letter in replayBuffer.fileName {
-          append(&replayFileName, 0)
-        }
-        UTF16.encode_string(replayFileName[:], replayBuffer.fileName)
-
-        replayBuffer.fileHandle = CreateFileW( &replayFileName[0], 
-                                             GENERIC_READ | GENERIC_WRITE, 
-                                             0, nil, CREATE_ALWAYS, 0, nil)
-
-        replayBuffer.memoryMap =  CreateFileMappingW(
-          replayBuffer.fileHandle, nil, PAGE_READWRITE,
-          u32(totalSize >> 32),
-          u32(totalSize & 0xFFFFFFFF),
-          nil)
-
-        replayBuffer.memoryBlock = MapViewOfFile(
-          replayBuffer.memoryMap,
-          FILE_MAP_ALL_ACCESS,
-          0, 0, uint(totalSize))
+        replayBuffer.gameMemoryBlock = VirtualAlloc( nil, uint(totalSize),
+                                                   MEM_RESERVE | MEM_COMMIT,
+                                                   PAGE_READWRITE)
+        replayBuffer.inputMemorySize = uint(HELPER.megabytes(100))
+        replayBuffer.inputMemoryBlock = cast([^]game_input)VirtualAlloc( nil, replayBuffer.inputMemorySize,
+                                                   MEM_RESERVE | MEM_COMMIT,
+                                                   PAGE_READWRITE)
       }
 
       gameMemory.permanentStorage = recordingState.gameMemoryBlock
@@ -541,62 +526,91 @@ main :: proc() {
 wInputBeginRecording :: proc(state: ^recording_state, 
                              inputRecordingIndex : int){
   using WIN32
-  replayBuffer := state.replayBuffers[inputRecordingIndex]
-  if replayBuffer.memoryBlock != nil {
+  replayBuffer := &state.replayBuffers[inputRecordingIndex]
+  if replayBuffer.gameMemoryBlock != nil {
+
     state.inputRecordingIndex = inputRecordingIndex
-    state.recordingHandle = replayBuffer.fileHandle
+    replayBuffer.inputMemoryIndex = 0
 
-    filePosition := LARGE_INTEGER(state.totalBlockSize)
-    SetFilePointerEx(state.recordingHandle,
-                    filePosition, nil, FILE_BEGIN)
-
-    MEM.copy(replayBuffer.memoryBlock, state.gameMemoryBlock, 
+    MEM.copy(replayBuffer.gameMemoryBlock, state.gameMemoryBlock, 
              int(state.totalBlockSize))
   }
 }
 
-wInputEndRecording :: proc(state: ^recording_state){
-  state.inputRecordingIndex = 0
+wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
+  replayBuffer := &state.replayBuffers[state.inputRecordingIndex]
+
+  if replayBuffer.inputMemoryIndex * size_of(game_input) < replayBuffer.inputMemorySize {
+    replayBuffer.inputMemoryBlock[replayBuffer.inputMemoryIndex] = newInput^
+    replayBuffer.inputMemoryIndex += 1
+  }
+  else {
+    //#TODO(Carbon): Logging
+  }
 }
 
-wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
+wInputEndRecording :: proc(state: ^recording_state){
+
   using WIN32
+
+  replayBuffer := &state.replayBuffers[state.inputRecordingIndex];
+  replayFileName : [dynamic]u16
+  append(&replayFileName, 0)
+  for letter in replayBuffer.fileName {
+    append(&replayFileName, 0)
+  }
+  UTF16.encode_string(replayFileName[:], replayBuffer.fileName)
+
+  fileHandle := CreateFileW( &replayFileName[0], 
+    GENERIC_WRITE, 
+    0, nil, CREATE_ALWAYS, 0, nil)
+
   bytesWritten : DWORD
-  WriteFile(state.recordingHandle, newInput, size_of(newInput^), &bytesWritten, nil)
+  WriteFile( fileHandle, state.gameMemoryBlock, u32(state.totalBlockSize), &bytesWritten, nil)
+  WriteFile( fileHandle, &replayBuffer.inputMemoryBlock[0], 
+             u32(replayBuffer.inputMemorySize), &bytesWritten, nil)
+  WIN32.CloseHandle(fileHandle)
+
+  replayBuffer.inputMemoryWritten = replayBuffer.inputMemoryIndex * size_of(game_input)
+  replayBuffer.inputMemoryIndex = 0
+  state.inputRecordingIndex = 0
 }
 
 wInputBeginPlayback :: proc(state: ^recording_state,
                             inputPlayingIndex: int){
   using WIN32
-  replayBuffer := state.replayBuffers[inputPlayingIndex]
-  if replayBuffer.memoryBlock != nil {
+  replayBuffer := &state.replayBuffers[inputPlayingIndex]
+  if replayBuffer.gameMemoryBlock != nil {
     state.inputPlayingIndex = inputPlayingIndex
-    state.playbackHandle = replayBuffer.fileHandle
 
-    filePosition : LARGE_INTEGER
-    filePosition = LARGE_INTEGER(state.totalBlockSize)
-    SetFilePointerEx(state.playbackHandle, filePosition, nil, FILE_BEGIN)
-
-    MEM.copy(state.gameMemoryBlock, replayBuffer.memoryBlock,
+    MEM.copy(state.gameMemoryBlock, replayBuffer.gameMemoryBlock,
              int(state.totalBlockSize))
+    replayBuffer.inputMemoryIndex = 0
    }
-}
-
-wInputEndPlayback :: proc(state: ^recording_state) {
-  state.inputPlayingIndex = 0
 }
 
 wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input) {
   using WIN32
   bytesRead : DWORD
-  result := ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
-  if bytesRead < size_of(newInput^) && result {
+
+  replayBuffer := &state.replayBuffers[state.inputPlayingIndex]; 
+
+  newInput^ = replayBuffer.inputMemoryBlock[replayBuffer.inputMemoryIndex]
+  replayBuffer.inputMemoryIndex += 1
+
+  byteSize := replayBuffer.inputMemoryIndex * size_of(game_input) 
+  if byteSize > replayBuffer.inputMemoryWritten {
     playingIndex := state.inputPlayingIndex
 
     wInputEndPlayback(state)
     wInputBeginPlayback(state, playingIndex)
-    ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
+    newInput^ = replayBuffer.inputMemoryBlock[replayBuffer.inputMemoryIndex]
+    replayBuffer.inputMemoryIndex += 1
   }
+}
+
+wInputEndPlayback :: proc(state: ^recording_state) {
+  state.inputPlayingIndex = 0
 }
 
 wGetSecondsElapsed :: proc(start, end: WIN32.LARGE_INTEGER) -> (result: f32) {
@@ -905,7 +919,6 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
                     wInputBeginPlayback(recordingState, 1)
                   }
                 } else {
-                  WIN32.CloseHandle(recordingState.playbackHandle)
                 }
               }
 
