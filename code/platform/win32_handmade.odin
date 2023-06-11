@@ -56,7 +56,15 @@ platform_state :: struct {
   filepath     : string
 }
 
+replay_buffer :: struct {
+  fileName    : string
+  fileHandle  : WIN32.HANDLE
+  memoryMap   : WIN32.HANDLE
+  memoryBlock : rawptr
+}
+
 recording_state :: struct {
+  //TODO(Carbon): this should be in platform_state at some point.
   gameMemoryBlock     : rawptr
   totalBlockSize      : u64
 
@@ -66,7 +74,7 @@ recording_state :: struct {
   playbackHandle      : WIN32.HANDLE
   inputPlayingIndex   : int
 
-  fileLocation        : string
+  replayBuffers       : [4]replay_buffer
 }
 
 S_OK :: WIN32.HRESULT(0)
@@ -109,7 +117,8 @@ main :: proc() {
 
   filePath_a : [255]u8
   WideCharToMultiByte(CP_UTF8, 0, cast(^u16)&fileName_w[0]
-                      len(fileName_w), cast(^u8)&filePath_a[0], len(filePath_a), nil, nil)
+                      len(fileName_w), cast(^u8)&filePath_a[0], 
+                      len(filePath_a), nil, nil)
 
   onePastLastSlash := 0
   for item, index in filePath_a {
@@ -194,10 +203,6 @@ main :: proc() {
       }
 
       recordingState : recording_state
-      recordingFile := "temp\\input_recording.igmr"
-      recordingFileFullPath := catString( globalState.filepath, recordingFile)
-      recordingState.fileLocation = recordingFileFullPath
-
 
       gameMemory : game_memory 
       gameMemory.permanentStorageSize = HELPER.megabytes(64);
@@ -213,6 +218,36 @@ main :: proc() {
                                                      uint(totalSize),
                                                      MEM_RESERVE | MEM_COMMIT,
                                                      PAGE_READWRITE)
+      for i := 0; i < len(recordingState.replayBuffers); i += 1 {
+
+        replayBuffer := &recordingState.replayBuffers[i]
+
+        stringBuffer : [255]u8
+        recordingFile := FMT.bprintf(stringBuffer[:], "temp\\input_recording_%d.igmr", i) 
+        replayBuffer.fileName = catString( globalState.filepath, recordingFile)
+
+        replayFileName : [dynamic]u16
+        append(&replayFileName, 0)
+        for letter in replayBuffer.fileName {
+          append(&replayFileName, 0)
+        }
+        UTF16.encode_string(replayFileName[:], replayBuffer.fileName)
+
+        replayBuffer.fileHandle = CreateFileW( &replayFileName[0], 
+                                             GENERIC_READ | GENERIC_WRITE, 
+                                             0, nil, CREATE_ALWAYS, 0, nil)
+
+        replayBuffer.memoryMap =  CreateFileMappingW(
+          replayBuffer.fileHandle, nil, PAGE_READWRITE,
+          u32(totalSize >> 32),
+          u32(totalSize & 0xFFFFFFFF),
+          nil)
+
+        replayBuffer.memoryBlock = MapViewOfFile(
+          replayBuffer.memoryMap,
+          FILE_MAP_ALL_ACCESS,
+          0, 0, uint(totalSize))
+      }
 
       gameMemory.permanentStorage = recordingState.gameMemoryBlock
       gameMemory.transientStorage = MEM.ptr_offset(cast(^u8)(gameMemory.permanentStorage),
@@ -262,8 +297,6 @@ main :: proc() {
         newKeyboardController.mouseX = mousePos.x 
         newKeyboardController.mouseY = mousePos.y
         newKeyboardController.mouseZ = 0 
-
-        FMT.println(newKeyboardController.mouseButtons)
 
 
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
@@ -428,7 +461,7 @@ main :: proc() {
           wInputRecord(&recordingState, newInput)
         }
         if recordingState.inputPlayingIndex != 0 {
-          wInputPlayback(&recordingState, newInput, recordingState.fileLocation)
+          wInputPlayback(&recordingState, newInput)
         }
 
         thread : thread_context
@@ -506,32 +539,23 @@ main :: proc() {
 }
 
 wInputBeginRecording :: proc(state: ^recording_state, 
-                             inputRecordingIndex : int,
-                             filename: string){
+                             inputRecordingIndex : int){
   using WIN32
+  replayBuffer := state.replayBuffers[inputRecordingIndex]
+  if replayBuffer.memoryBlock != nil {
+    state.inputRecordingIndex = inputRecordingIndex
+    state.recordingHandle = replayBuffer.fileHandle
 
-  state.inputRecordingIndex = inputRecordingIndex
+    filePosition := LARGE_INTEGER(state.totalBlockSize)
+    SetFilePointerEx(state.recordingHandle,
+                    filePosition, nil, FILE_BEGIN)
 
-  filename_w: [dynamic]u16
-  append(&filename_w, 0)
-  for letter in filename{
-    append(&filename_w, 0)
+    MEM.copy(replayBuffer.memoryBlock, state.gameMemoryBlock, 
+             int(state.totalBlockSize))
   }
-  UTF16.encode_string(filename_w[:], filename)
-
-  state.recordingHandle = CreateFileW( &filename_w[0], GENERIC_WRITE, 
-                                       0, nil, CREATE_ALWAYS, 0, nil)
-
-  bytesWritten := cast(u32)state.totalBlockSize
-  //NOTE(Carbon) windows only accepts 32 bit writes, once its larger we have to 
-  //             loop. Asserting failure for now
-  assert(u64(bytesWritten) == state.totalBlockSize)
-  WriteFile(state.recordingHandle, state.gameMemoryBlock, 
-            u32(state.totalBlockSize), &bytesWritten, nil)
 }
 
 wInputEndRecording :: proc(state: ^recording_state){
-  WIN32.CloseHandle(state.recordingHandle)
   state.inputRecordingIndex = 0
 }
 
@@ -542,40 +566,35 @@ wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
 }
 
 wInputBeginPlayback :: proc(state: ^recording_state,
-                            inputPlayingIndex: int,
-                            filename: string  ){
+                            inputPlayingIndex: int){
   using WIN32
+  replayBuffer := state.replayBuffers[inputPlayingIndex]
+  if replayBuffer.memoryBlock != nil {
+    state.inputPlayingIndex = inputPlayingIndex
+    state.playbackHandle = replayBuffer.fileHandle
 
-  state.inputPlayingIndex = inputPlayingIndex
+    filePosition : LARGE_INTEGER
+    filePosition = LARGE_INTEGER(state.totalBlockSize)
+    SetFilePointerEx(state.playbackHandle, filePosition, nil, FILE_BEGIN)
 
-  filename_w: [dynamic]u16
-  append(&filename_w, 0)
-  for letter in filename{
-    append(&filename_w, 0)
-  }
-  UTF16.encode_string(filename_w[:], filename)
-
-  state.playbackHandle = CreateFileW( &filename_w[0], GENERIC_READ, FILE_SHARE_READ,
-  nil, OPEN_EXISTING, 0, nil)
-
-  bytesRead : DWORD
-  result := ReadFile(state.playbackHandle, state.gameMemoryBlock, 
-                     u32(state.totalBlockSize), &bytesRead, nil)
+    MEM.copy(state.gameMemoryBlock, replayBuffer.memoryBlock,
+             int(state.totalBlockSize))
+   }
 }
 
 wInputEndPlayback :: proc(state: ^recording_state) {
-  WIN32.CloseHandle(state.playbackHandle)
   state.inputPlayingIndex = 0
 }
 
-wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input, filepath: string ) {
+wInputPlayback :: proc(state: ^recording_state, newInput: ^game_input) {
   using WIN32
   bytesRead : DWORD
   result := ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
   if bytesRead < size_of(newInput^) && result {
     playingIndex := state.inputPlayingIndex
+
     wInputEndPlayback(state)
-    wInputBeginPlayback(state, playingIndex, filepath)
+    wInputBeginPlayback(state, playingIndex)
     ReadFile(state.playbackHandle, newInput, size_of(newInput^), &bytesRead, nil)
   }
 }
@@ -787,7 +806,6 @@ wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
 wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
                               isDown: bool) {
   //TODO(Carbon) Why is this procing when we should be stopping key repeats?
-  assert(keyboardState.endedDown != isDown, "function shouldn't be called unless there was a transition.")
   keyboardState.endedDown = isDown;
   keyboardState.transitionCount += 1
 }
@@ -821,11 +839,11 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
         //controlDown := (wParam & MK_CONTROL)  != 0
         //shiftDown   := (wParam & MK_SHIFT)    != 0
 
-        keyboardController.mouseButtons[0].endedDown = lmbDown
-        keyboardController.mouseButtons[1].endedDown = rmbDown
-        keyboardController.mouseButtons[2].endedDown = middleDown
-        keyboardController.mouseButtons[3].endedDown = x1Down
-        keyboardController.mouseButtons[4].endedDown = x2Down
+        keyboardController.mouseButtons[.lmb].endedDown = lmbDown
+        keyboardController.mouseButtons[.rmb].endedDown = rmbDown
+        keyboardController.mouseButtons[.middle].endedDown = middleDown
+        keyboardController.mouseButtons[.x1].endedDown = x1Down
+        keyboardController.mouseButtons[.x2].endedDown = x2Down
 
          
       case WM_LBUTTONUP: fallthrough
@@ -841,11 +859,11 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
         //controlDown := (wParam & MK_CONTROL)  != 0
         //shiftDown   := (wParam & MK_SHIFT)    != 0
 
-        keyboardController.mouseButtons[0].endedDown = lmbDown
-        keyboardController.mouseButtons[1].endedDown = rmbDown
-        keyboardController.mouseButtons[2].endedDown = middleDown
-        keyboardController.mouseButtons[3].endedDown = x1Down
-        keyboardController.mouseButtons[4].endedDown = x2Down
+        keyboardController.mouseButtons[.lmb].endedDown = lmbDown
+        keyboardController.mouseButtons[.rmb].endedDown = rmbDown
+        keyboardController.mouseButtons[.middle].endedDown = middleDown
+        keyboardController.mouseButtons[.x1].endedDown = x1Down
+        keyboardController.mouseButtons[.x2].endedDown = x2Down
 
         ReleaseCapture()
 
@@ -878,11 +896,16 @@ wHandlePendingMessages :: proc(recordingState: ^recording_state,
 
             case 'L':
               if isDown {
-                if recordingState.inputRecordingIndex == 0 {
-                  wInputBeginRecording(recordingState, 1, recordingState.fileLocation)
+                if recordingState.inputPlayingIndex == 0 {
+
+                  if recordingState.inputRecordingIndex == 0 {
+                    wInputBeginRecording(recordingState, 1)
+                  } else {
+                    wInputEndRecording(recordingState)
+                    wInputBeginPlayback(recordingState, 1)
+                  }
                 } else {
-                  wInputEndRecording(recordingState)
-                  wInputBeginPlayback(recordingState, 1, recordingState.fileLocation)
+                  WIN32.CloseHandle(recordingState.playbackHandle)
                 }
               }
 

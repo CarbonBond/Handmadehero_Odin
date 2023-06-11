@@ -100,7 +100,7 @@ game_controller_input :: struct {
   buttons:     [game_buttons]game_button_state
 
   //TODO(Carbon): Should I not have these hear but in game_input? 
-  mouseButtons  : [5]game_button_state
+  mouseButtons  : [mouse_buttons]game_button_state
   mouseZ, mouseX, mouseY : i32
 }
 
