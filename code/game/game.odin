@@ -4,6 +4,8 @@ import MATH       "core:math"
 import MEM        "core:mem"
 import FMT        "core:fmt"
 
+import game "./definitions/"
+
 /* NOTE(Carbon) Compiler flags
   
 SLOW:
@@ -22,119 +24,24 @@ PRINT:
 
 //DEFINITION FOR DEBUG FUNCTIONS
 
-DEBUG_read_file_result :: struct {
-  contentsSize: u32
-  contents: rawptr
-}
-
-thread_context :: struct {
-  placeholder :int
-}
-
-game_memory :: struct {
-  isInitialized        : bool
-  permanentStorageSize : u64
-  permanentStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
-  transientStorageSize : u64
-  transientStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
-
-  debug_platformReadEntireFile: proc(thread: ^thread_context, filename: string) -> 
-                                    ( DEBUG_read_file_result, bool)
-
-  debug_platformWriteEntireFile: proc(thread: ^thread_context,filename: string,
-                                      memorySize: u32, memory: rawptr) -> bool 
-
-  debug_platformFreeFileMemory: proc(thread: ^thread_context,memory: rawptr)  
-}
-
-game_state :: struct {
-  
-}
-
-game_input :: struct {
-  controllers                : [5]game_controller_input
-  secondsToAdvanceOverUpdate : f32
-}
-
-game_position :: enum {
-  x,
-  y
-}
-
-game_buttons :: enum {
-  move_up,
-  move_down,
-  move_left,
-  move_right,
-  action_up,
-  action_down,
-  action_left,
-  action_right,
-  shoulder_left,
-  shoulder_right,
-  back,
-  start,
-}
-
-mouse_buttons :: enum {
-  lmb,
-  rmb,
-  middle,
-  x1,
-  x2
-}
-
-game_controller_input :: struct {
-
-  isConnected: bool,
-  isAnalog:    bool,
-
-  lStick:[game_position]f32 
-  rStick:[game_position]f32 
-
-  buttons:     [game_buttons]game_button_state
-  
-  mouseButtons  : [mouse_buttons]game_button_state
-  mouseZ, mouseX, mouseY : i32
-}
-
-game_button_state :: struct {
-  transitionCount: int
-  endedDown:       bool
-}
-
-game_offscreen_buffer :: struct {
-        memory        : [^]u32
-        width         : i32
-        height        : i32
-        pitch         : i32
-}
-
-game_sound_output_buffer :: struct {
-  samples : [^]i16
-  samplesPerSecond: u32
-  sampleCount: int
-}
-
-//Global for now
-
 
 //TODO(Carbon) is there a better way?
 
 // For Timing, controls input, bitmap buffer, and sound buffer.
 // TODO: Controls, Bitmap, Sound Buffer
 @export
-gameUpdateAndRender :: proc(thread: ^thread_context,
-                            gameMemory:   ^game_memory, 
-                            colorBuffer : ^game_offscreen_buffer, 
-                            gameControls: ^game_input) {
+gameUpdateAndRender :: proc(thread: ^game.thread_context,
+                            gameMemory:   ^game.memory, 
+                            colorBuffer : ^game.offscreen_buffer, 
+                            gameControls: ^game.input) {
                         //TODO(Carbon): Pass Time
 
+  using game 
   when #config(SLOW, true) {
-    assert(size_of(game_state) <= gameMemory.permanentStorageSize, "Game state to large for memory")
+    assert(size_of(game.state) <= gameMemory.permanentStorageSize, "Game state to large for memory")
   }
 
-  gameState := cast(^game_state)(gameMemory.permanentStorage)
+  gameState := cast(^game.state)(gameMemory.permanentStorage)
 
   if !gameMemory.isInitialized {
     gameMemory.isInitialized = true
@@ -158,17 +65,17 @@ gameUpdateAndRender :: proc(thread: ^thread_context,
 }
 
 @export
-gameGetSoundSamples :: proc(thread: ^thread_context,
-                            memory: ^game_memory,
-                            soundBuffer: ^game_sound_output_buffer) {
-  gameState := cast(^game_state) memory.permanentStorage
+gameGetSoundSamples :: proc(thread: ^game.thread_context,
+                            memory: ^game.memory,
+                            soundBuffer: ^game.sound_output_buffer) {
+  gameState := cast(^game.state) memory.permanentStorage
   playbackTime := 1.0
   //NOTE(Carbon): Constants are Hz, Vol, multiplier (For mute)
   gameOutputSound(soundBuffer, 400, 1000, 0, &playbackTime )
 }
 
 @private
-gameOutputSound :: proc(soundBuffer: ^game_sound_output_buffer, 
+gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer, 
                         toneHz: u32, toneVolume, toneMulti: u16,
                         playbackTime: ^f64) {
 
@@ -184,8 +91,8 @@ gameOutputSound :: proc(soundBuffer: ^game_sound_output_buffer,
 }
 
 @private
-renderFakePlayer :: proc  (bitmap: ^game_offscreen_buffer, 
-                           position: [game_position]f32) {
+renderFakePlayer :: proc  (bitmap: ^game.offscreen_buffer, 
+                           position: [game.position]f32) {
 
   bitmapMemoryArray := bitmap.memory[:]
   size : i32 = 10
@@ -201,7 +108,7 @@ renderFakePlayer :: proc  (bitmap: ^game_offscreen_buffer,
 }
 
 @private
-renderWeirdGradiant :: proc  (bitmap: ^game_offscreen_buffer,
+renderWeirdGradiant :: proc  (bitmap: ^game.offscreen_buffer,
                                greenOffset, blueOffset, redOffset: i32) {
 
   bitmapMemoryArray := bitmap.memory[:]

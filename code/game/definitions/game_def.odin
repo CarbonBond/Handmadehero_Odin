@@ -1,4 +1,4 @@
-package main
+package game
 
 import DLIB       "core:dynlib"
 
@@ -23,13 +23,17 @@ PRINT:
   true: turns on print statements
 
 */
+DEBUG_read_file_result :: struct {
+  contentsSize: u32
+  contents: rawptr
+}
 
 thread_context :: struct {
   placeholder :int
 }
 
 
-game_memory :: struct {
+memory :: struct {
   isInitialized        : bool
   permanentStorageSize : u64
   permanentStorage     : rawptr //NOTE(Carbon) required to be cleared to 0
@@ -45,20 +49,20 @@ game_memory :: struct {
   debug_platformFreeFileMemory: proc(thread: ^thread_context, memory: rawptr)  
 }
 
-game_state :: struct {
+state :: struct {
 }
 
-game_input :: struct {
-  controllers                : [5]game_controller_input
+input :: struct {
+  controllers                : [5]controller_input
   secondsToAdvanceOverUpdate : f32
 }
 
-game_position :: enum {
+position :: enum {
   x,
   y
 }
 
-game_buttons :: enum {
+buttons :: enum {
   move_up,
   move_down,
   move_left,
@@ -81,44 +85,44 @@ mouse_buttons :: enum {
   x2
 }
 
-game_controller_input :: struct {
+controller_input :: struct {
 
   isConnected: bool,
   isAnalog:    bool,
 
-  lStick:[game_position]f32 
-  rStick:[game_position]f32 
+  lStick:[position]f32 
+  rStick:[position]f32 
 
-  buttons:     [game_buttons]game_button_state
+  buttons:     [buttons]button_state
 
-  //TODO(Carbon): Should I not have these hear but in game_input? 
-  mouseButtons  : [mouse_buttons]game_button_state
+  //TODO(Carbon): Should I not have these hear but in input? 
+  mouseButtons  : [mouse_buttons]button_state
   mouseZ, mouseX, mouseY : i32
 }
 
-game_button_state :: struct {
+button_state :: struct {
   transitionCount: int
   endedDown:       bool
 }
 
-game_offscreen_buffer :: struct {
+offscreen_buffer :: struct {
         memory        : [^]u32
         width         : i32
         height        : i32
         pitch         : i32
 }
 
-game_sound_output_buffer :: struct {
+sound_output_buffer :: struct {
   samples : [^]i16
   samplesPerSecond: u32
   sampleCount: int
 }
 
-empty_UpdateAndRender :: proc(thread: ^thread_context, gameMemory: ^game_memory, 
-                              colorBuffer : ^game_offscreen_buffer, 
-                              gameControls: ^game_input) { return } 
+empty_UpdateAndRender :: proc(thread: ^thread_context, gameMemory: ^memory, 
+                              colorBuffer : ^offscreen_buffer, 
+                              gameControls: ^input) { return } 
 
-empty_GetSoundSamples :: proc( thread: ^thread_context, memory: ^game_memory, 
-                               soundBuffer: ^game_sound_output_buffer) 
+empty_GetSoundSamples :: proc( thread: ^thread_context, memory: ^memory, 
+                               soundBuffer: ^sound_output_buffer) 
                                { return} 
 

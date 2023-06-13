@@ -20,6 +20,8 @@ import WASAPI  "../windows_port/audio/wasapi"
 import WINGDI  "../windows_port/wingdi/"
 import HELPER  "../helper"
 
+import game    "../game/definitions/"
+
 
 /*TODO(Carbon) Missing Functionality
   
@@ -62,7 +64,7 @@ replay_buffer :: struct {
 
   stateMemoryBlock    : rawptr
 
-  inputMemoryBlock   : [^]game_input
+  inputMemoryBlock   : [^]game.input
   inputMemoryIndex   : uint
   inputMemorySize    : uint 
   inputMemoryWritten : uint 
@@ -203,7 +205,7 @@ main :: proc() {
 
       recordingState : recording_state
 
-      gameMemory : game_memory 
+      gameMemory : game.memory 
       gameMemory.permanentStorageSize = HELPER.megabytes(64);
       gameMemory.transientStorageSize = HELPER.megabytes(501);
       gameMemory.debug_platformReadEntireFile =  DEBUG_platformReadEntireFile
@@ -229,7 +231,7 @@ main :: proc() {
                                                    MEM_RESERVE | MEM_COMMIT,
                                                    PAGE_READWRITE)
         replayBuffer.inputMemorySize = uint(HELPER.megabytes(100))
-        replayBuffer.inputMemoryBlock = cast([^]game_input)VirtualAlloc( nil, replayBuffer.inputMemorySize,
+        replayBuffer.inputMemoryBlock = cast([^]game.input)VirtualAlloc( nil, replayBuffer.inputMemorySize,
                                                    MEM_RESERVE | MEM_COMMIT,
                                                    PAGE_READWRITE)
       }
@@ -241,31 +243,31 @@ main :: proc() {
       prevCounter := wGetWallClock()
       prevCyclesCount : i64 = INTRINSICS.read_cycle_counter()
 
-      inputs : [2]game_input
+      inputs : [2]game.input
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
       newInput.secondsToAdvanceOverUpdate = targetSecondsPerFrame;
 
-      game := wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
+      gameCode := wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
 
       globalState.running = true 
       for globalState.running {
         lastWriteTime, er := OS.last_write_time_by_name(dllFileFullPath)
-        if game.lastWriteTime != lastWriteTime {
-          wUnloadGameCode(&game)
-          game = wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
+        if gameCode.lastWriteTime != lastWriteTime {
+          wUnloadGameCode(&gameCode)
+          gameCode = wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
         }
 
-        oldKeyboardController : ^game_controller_input = &oldInput.controllers[0]
-        newKeyboardController : ^game_controller_input = &newInput.controllers[0]
-        newKeyboardController^ = game_controller_input{}
+        oldKeyboardController : ^game.controller_input = &oldInput.controllers[0]
+        newKeyboardController : ^game.controller_input = &newInput.controllers[0]
+        newKeyboardController^ = game.controller_input{}
 
         newKeyboardController.isConnected = true
-        for i in game_buttons {
+        for i in game.buttons {
           newKeyboardController.buttons[i].endedDown = oldKeyboardController.buttons[i].endedDown
         }
-        for i in mouse_buttons {
+        for i in game.mouse_buttons {
           newKeyboardController.mouseButtons[i].endedDown = oldKeyboardController.mouseButtons[i].endedDown
         }
 
@@ -289,8 +291,8 @@ main :: proc() {
         for i : DWORD = 0; i < MaxControllerCount; i += 1 { 
 
           ourController := i + 1
-          oldController : ^game_controller_input = &oldInput.controllers[ourController]
-          newController : ^game_controller_input = &newInput.controllers[ourController]
+          oldController : ^game.controller_input = &oldInput.controllers[ourController]
+          newController : ^game.controller_input = &newInput.controllers[ourController]
           
           controller: XINPUT.STATE
           err := XINPUT.GetState(i, &controller)
@@ -438,7 +440,7 @@ main :: proc() {
 
         if globalState.pause do continue
         
-        colorBuffer : game_offscreen_buffer
+        colorBuffer : game.offscreen_buffer
         colorBuffer.memory = globalState.buffer.memory
         colorBuffer.width  = globalState.buffer.width
         colorBuffer.height = globalState.buffer.height
@@ -452,8 +454,8 @@ main :: proc() {
                           u32(globalState.totalBlockSize), newInput)
         }
 
-        thread : thread_context
-        game.UpdateAndRender(&thread, &gameMemory, &colorBuffer, newInput)
+        thread : game.thread_context
+        gameCode.UpdateAndRender(&thread, &gameMemory, &colorBuffer, newInput)
 
         //Padding is how much valid data is queued up in the sound buffer
         //NOTE(Carbon): One frame is 2 channels at 16 bits, so total of 4 bytes
@@ -461,11 +463,11 @@ main :: proc() {
         globalState.audio.client->GetCurrentPadding(&bufferPadding)
         nFramesToWrite := globalState.audio.bufferSizeFrames - bufferPadding
         //nFramesToWrite :=  u32(f32(soundBuffer.samplesPerSecond) * targetSecondsPerFrame * 1.1)  
-        soundBuffer : game_sound_output_buffer
+        soundBuffer : game.sound_output_buffer
         soundBuffer.samples = samples // Allocated before after init
         soundBuffer.samplesPerSecond = globalState.audio.samplesPerSecond 
         soundBuffer.sampleCount = int(nFramesToWrite)
-        game.GetSoundSamples(&thread, &gameMemory, &soundBuffer) 
+        gameCode.GetSoundSamples(&thread, &gameMemory, &soundBuffer) 
         //TODO(Carbon) figure out how the constant below effects buffer with 
         //             a displayblable debug. Seems That we need a fairly high 
         //             audio latency
@@ -489,7 +491,7 @@ main :: proc() {
 
         ReleaseDC(window, deviceContext)
 
-        temp: ^game_input = newInput
+        temp: ^game.input = newInput
         newInput = oldInput
         oldInput = temp
 
@@ -542,10 +544,10 @@ wInputBeginRecording :: proc(state: ^recording_state,
   }
 }
 
-wInputRecord :: proc(state: ^recording_state, newInput: ^game_input ) {
+wInputRecord :: proc(state: ^recording_state, newInput: ^game.input ) {
   replayBuffer := &state.replayBuffers[state.inputRecordingIndex]
 
-  if replayBuffer.inputMemoryIndex * size_of(game_input) < replayBuffer.inputMemorySize {
+  if replayBuffer.inputMemoryIndex * size_of(game.input) < replayBuffer.inputMemorySize {
     replayBuffer.inputMemoryBlock[replayBuffer.inputMemoryIndex] = newInput^
     replayBuffer.inputMemoryIndex += 1
   }
@@ -577,7 +579,7 @@ wInputEndRecording :: proc(state: ^recording_state
              u32(replayBuffer.inputMemorySize), &bytesWritten, nil)
   WIN32.CloseHandle(fileHandle)
 
-  replayBuffer.inputMemoryWritten = replayBuffer.inputMemoryIndex * size_of(game_input)
+  replayBuffer.inputMemoryWritten = replayBuffer.inputMemoryIndex * size_of(game.input)
   replayBuffer.inputMemoryIndex = 0
   state.inputRecordingIndex = 0
 }
@@ -600,7 +602,7 @@ wInputBeginPlayback :: proc(state: ^recording_state,
 wInputPlayback :: proc(state: ^recording_state,
                        stateMemoryBlock: rawptr,
                        stateMemorySize: u32,
-                       newInput: ^game_input) {
+                       newInput: ^game.input) {
   using WIN32
   bytesRead : DWORD
 
@@ -609,7 +611,7 @@ wInputPlayback :: proc(state: ^recording_state,
   newInput^ = replayBuffer.inputMemoryBlock[replayBuffer.inputMemoryIndex]
   replayBuffer.inputMemoryIndex += 1
 
-  byteSize := replayBuffer.inputMemoryIndex * size_of(game_input) 
+  byteSize := replayBuffer.inputMemoryIndex * size_of(game.input) 
   if byteSize > replayBuffer.inputMemoryWritten {
     playingIndex := state.inputPlayingIndex
 
@@ -822,13 +824,13 @@ wInitAudio :: proc(audio: ^w_audio) -> bool {
    
 @private 
 wProcessXInputDigitalButton :: proc(XInputButtonState: WIN32.WORD,
-                                   newState, oldState: ^game_button_state, 
+                                   newState, oldState: ^game.button_state, 
                                    buttonBit: WIN32.WORD) {
   newState.endedDown = bool(XInputButtonState & buttonBit)
   oldState.transitionCount = 1 if (oldState.endedDown != newState.endedDown) else 0
 }
 
-wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
+wProcessKeyboardMessage :: proc(keyboardState: ^game.button_state,
                               isDown: bool) {
   //TODO(Carbon) Why is this procing when we should be stopping key repeats?
   keyboardState.endedDown = isDown;
@@ -836,7 +838,7 @@ wProcessKeyboardMessage :: proc(keyboardState: ^game_button_state,
 }
 
 wHandlePendingMessages :: proc(recordingState: ^recording_state,
-                               keyboardController: ^game_controller_input,
+                               keyboardController: ^game.controller_input,
                                window: WIN32.HWND) {
   using WIN32 
    
@@ -986,11 +988,11 @@ game_code :: struct {
   library         : DLIB.Library
   lastWriteTime   : OS.File_Time
 
-  UpdateAndRender : proc(thread: ^thread_context,gameMemory:   ^game_memory, 
-                         colorBuffer : ^game_offscreen_buffer, 
-                         gameControls: ^game_input) 
-  GetSoundSamples : proc(thread: ^thread_context, memory: ^game_memory, 
-                          soundBuffer: ^game_sound_output_buffer) 
+  UpdateAndRender : proc(thread: ^game.thread_context,gameMemory: ^game.memory, 
+                         colorBuffer : ^game.offscreen_buffer, 
+                         gameControls: ^game.input) 
+  GetSoundSamples : proc(thread: ^game.thread_context, memory: ^game.memory, 
+                          soundBuffer: ^game.sound_output_buffer) 
 }
 
 
@@ -1016,17 +1018,17 @@ wLoadGameCode :: proc(dllName, dllTempName: string) -> game_code {
     result.isValid = true 
     result.library = lib
     tmp := DLIB.symbol_address( lib, "gameUpdateAndRender")
-    result.UpdateAndRender = cast( proc(thread: ^thread_context,
-                                        gameMemory:   ^game_memory, 
-                                        colorBuffer : ^game_offscreen_buffer, 
-                                        gameControls: ^game_input))tmp
+    result.UpdateAndRender = cast( proc(thread: ^game.thread_context,
+                                        gameMemory:   ^game.memory, 
+                                        colorBuffer : ^game.offscreen_buffer, 
+                                        gameControls: ^game.input))tmp
     tmp = DLIB.symbol_address( lib, "gameGetSoundSamples")
-    result.GetSoundSamples = cast( proc(thread: ^thread_context,
-                                        memory: ^game_memory, 
-                                        soundBuffer: ^game_sound_output_buffer))tmp
+    result.GetSoundSamples = cast( proc(thread: ^game.thread_context,
+                                        memory: ^game.memory, 
+                                        soundBuffer: ^game.sound_output_buffer))tmp
   } else {
-    result.UpdateAndRender = empty_UpdateAndRender
-    result.GetSoundSamples = empty_GetSoundSamples
+    result.UpdateAndRender = game.empty_UpdateAndRender
+    result.GetSoundSamples = game.empty_GetSoundSamples
   }
   return result
 }
@@ -1035,8 +1037,8 @@ wUnloadGameCode :: proc(gameCode: ^game_code) {
 
   DLIB.unload_library(gameCode.library)
   gameCode.isValid = false
-  gameCode.UpdateAndRender = empty_UpdateAndRender
-  gameCode.GetSoundSamples = empty_GetSoundSamples
+  gameCode.UpdateAndRender = game.empty_UpdateAndRender
+  gameCode.GetSoundSamples = game.empty_GetSoundSamples
 }
 
 
@@ -1045,17 +1047,12 @@ when #config(INTERNAL, true) {
   //NOTE(Carbon) Don't used for shipped game. Locks and not thread safe. 
   //             Doesn't protext lost data
 
-  DEBUG_read_file_result :: struct {
-    contentsSize: u32
-    contents: rawptr
-  }
 
-  DEBUG_platformReadEntireFile :: proc(thread: ^thread_context,
-                                       filename: string) ->
-                                      (DEBUG_read_file_result, bool) {
+  DEBUG_platformReadEntireFile :: proc(thread: ^game.thread_context, filename: string) -> 
+                                    (game.DEBUG_read_file_result, bool) {
     using WIN32
 
-    result : DEBUG_read_file_result
+    result : game.DEBUG_read_file_result
     success := false
 
     filename_w: [dynamic]u16
@@ -1098,15 +1095,15 @@ when #config(INTERNAL, true) {
     return result, success
   }
 
-  DEBUG_platformFreeFileMemory :: proc(thread: ^thread_context, memory: rawptr) {
+  DEBUG_platformFreeFileMemory :: proc(thread: ^game.thread_context, memory: rawptr) {
     using WIN32
     if memory != nil do WIN32.VirtualFree(memory, 0, MEM_RELEASE)
     return
   }
 
 
-  DEBUG_platformWriteEntireFile :: proc(thread: ^thread_context, filename: string,
-                                        memorySize: u32, memory: rawptr) -> bool {
+  DEBUG_platformWriteEntireFile :: proc(thread: ^game.thread_context, filename: string,
+                                      memorySize: u32, memory: rawptr) -> bool { 
     using WIN32
 
     result := false
