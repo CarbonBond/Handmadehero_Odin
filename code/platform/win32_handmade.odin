@@ -139,7 +139,7 @@ main :: proc() {
   dllTempFile := "game_temp.dll"
   dllTempFileFullPath := catString(globalState.filepath, dllTempFile)
 
-  wResizeDIBSection(&globalState.buffer, 1280, 720)
+  wResizeDIBSection(&globalState.buffer, 960, 560)
 
   windowClass :               WNDCLASSW
   windowClass.style         = CS_HREDRAW | CS_VREDRAW 

@@ -61,6 +61,14 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
   }
 
+  //clear
+  drawRectangle(colorBuffer, 0x00FFFFFF,
+                0, 0, f32(colorBuffer.width), f32(colorBuffer.height))
+  drawRectangle(colorBuffer, 0x00FF00FF, -10, -10,
+                100, 100)
+  drawRectangle(colorBuffer, 0x00FF00FF,
+                f32(colorBuffer.width)-100, f32(colorBuffer.height)-100, 
+                f32(colorBuffer.width)+100, f32(colorBuffer.height)+100)
 
 }
 
@@ -87,6 +95,37 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
     buffer[frameIndex] = i16(amp)
     buffer[frameIndex + 1] = i16(amp)
     playbackTime^ += 6.28 / f64(wavePeriod)
+  }
+}
+
+roundF32ToInt32 :: proc(num : f32) -> i32 {
+  return i32(num + 0.5)
+}
+
+@private
+drawRectangle :: proc (buffer: ^game.offscreen_buffer, color: u32,
+                       xMin_f, yMin_f, xMax_f, yMax_f: f32) {
+
+  xMin := roundF32ToInt32(xMin_f)
+  yMin := roundF32ToInt32(yMin_f)
+  xMax := roundF32ToInt32(xMax_f)
+  yMax := roundF32ToInt32(yMax_f)
+
+  if xMin < 0 do xMin = 0
+  if yMin < 0 do yMin = 0
+
+  if xMax > buffer.width  do xMax = buffer.width
+  if yMax > buffer.height do yMax = buffer.height
+
+  bufferMemoryArray := buffer.memory[:]
+
+  size : i32 = 10
+  row : i32 = i32(yMin) * buffer.pitch 
+  for y := yMin; y < yMax; y += 1 {
+    for x := xMin; x < xMax; x += 1 {
+      bufferMemoryArray[row + x] = color
+    }
+    row += buffer.pitch
   }
 }
 
