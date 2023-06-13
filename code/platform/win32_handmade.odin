@@ -39,10 +39,6 @@ import HELPER  "../helper"
 
 */
 
-//TESTING 
-playbackTime := 1.0
-//END TESTING
-
 
 // TODO(Carbon) Combined platform_state and recording_state
 @private
@@ -248,6 +244,8 @@ main :: proc() {
       inputs : [2]game_input
       newInput := &inputs[0]
       oldInput := &inputs[1]
+
+      newInput.secondsToAdvanceOverUpdate = targetSecondsPerFrame;
 
       game := wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
 

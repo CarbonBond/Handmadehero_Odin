@@ -48,20 +48,12 @@ game_memory :: struct {
 }
 
 game_state :: struct {
-  playbackTime : f64 
-  blueOffset   : i32 
-  greenOffset  : i32
-  redOffset    : i32
-  toneHz       : u32
-  toneVolume   : u16
-  toneMulti    : u16
-
-  playerPosition: [game_position]f32
+  
 }
 
 game_input :: struct {
-  //TODO(Carbon): Add clock value
-  controllers: [5]game_controller_input
+  controllers                : [5]game_controller_input
+  secondsToAdvanceOverUpdate : f32
 }
 
 game_position :: enum {
@@ -145,24 +137,7 @@ gameUpdateAndRender :: proc(thread: ^thread_context,
   gameState := cast(^game_state)(gameMemory.permanentStorage)
 
   if !gameMemory.isInitialized {
-
-    filename := #file
-    file, success := gameMemory.debug_platformReadEntireFile(thread, filename)
-    if success {
-      // NOTE(Carbon) testing this by writting this file.
-      //DEBUG_platformWriteEntireFile(thread, "./test.out", file.contentsSize, file.contents )
-      gameMemory.debug_platformFreeFileMemory(thread, file.contents)
-    }
-
-    gameState.playbackTime = 1
-    gameState.toneHz      = 450
-    gameState.toneVolume  = 0
-    gameState.toneMulti   = 0
-
     gameMemory.isInitialized = true
-
-    gameState.playerPosition[.x] = 100
-    gameState.playerPosition[.y] = 100
   }
 
 
@@ -172,34 +147,14 @@ gameUpdateAndRender :: proc(thread: ^thread_context,
     if !controller.isConnected do continue
 
     if(controller.isAnalog) {
-      gameState.redOffset   += i32(1 * (controller.rStick[.x]))
-      gameState.toneHz      =  u32(500 * (controller.rStick[.y])) + 600
 
-      gameState.playerPosition[.x] += (5 * (controller.lStick[.x]))
-      gameState.playerPosition[.y] += (5 * (controller.lStick[.y]))
     } else {
-    if controller.buttons[.move_up].endedDown { gameState.blueOffset -= 5 }
-    if controller.buttons[.move_down].endedDown { gameState.blueOffset += 5 }
-    if controller.buttons[.move_left].endedDown { gameState.greenOffset -= 5 }
-    if controller.buttons[.move_right].endedDown { gameState.greenOffset += 5 }
+
     }
 
-    if controller.buttons[.action_right].endedDown && gameState.toneVolume < 2000 { gameState.toneVolume += 10 }
-    if controller.buttons[.action_left].endedDown && gameState.toneVolume > 0 { gameState.toneVolume -= 10 }
-    if controller.buttons[.action_down].endedDown { gameState.toneMulti = 0 } else { gameState.toneMulti = 1 }
-    if controller.buttons[.action_up].endedDown { gameState.playerPosition[.y] -= 10} 
   }
 
-  /* TODO(Carbon): Removed for the time being, figure out how to add back?
-  if input0.buttons[.move_left].endedDown { lVibration = 60000}
-  else { lVibration = 0 }
 
-  if input0.buttons[.move_right].endedDown { rVibration = 60000 }
-  else { rVibration = 0 }
-  */
-
-  renderWeirdGradiant(colorBuffer, gameState.greenOffset, gameState.blueOffset, gameState.redOffset)
-  renderFakePlayer(colorBuffer, gameState.playerPosition)
 }
 
 @export
@@ -207,9 +162,9 @@ gameGetSoundSamples :: proc(thread: ^thread_context,
                             memory: ^game_memory,
                             soundBuffer: ^game_sound_output_buffer) {
   gameState := cast(^game_state) memory.permanentStorage
-  gameOutputSound(soundBuffer, gameState.toneHz, 
-                  gameState.toneVolume, gameState.toneMulti,
-                  &gameState.playbackTime)
+  playbackTime := 1.0
+  //NOTE(Carbon): Constants are Hz, Vol, multiplier (For mute)
+  gameOutputSound(soundBuffer, 400, 1000, 0, &playbackTime )
 }
 
 @private

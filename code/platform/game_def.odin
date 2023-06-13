@@ -46,19 +46,11 @@ game_memory :: struct {
 }
 
 game_state :: struct {
-  playbackTime : f64 
-  blueOffset   : i32 
-  greenOffset  : i32
-  redOffset    : i32
-  toneHz       : u32
-  toneVolume   : u16
-  toneMulti    : u16
 }
 
 game_input :: struct {
-  //TODO(Carbon): Add clock value
-  controllers: [5]game_controller_input
-
+  controllers                : [5]game_controller_input
+  secondsToAdvanceOverUpdate : f32
 }
 
 game_position :: enum {
