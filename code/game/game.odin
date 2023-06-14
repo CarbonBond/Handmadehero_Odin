@@ -57,8 +57,17 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
     } else {
 
-    }
+      playerDX, playerDY : f32 = 0.0, 0.0
 
+      if controller.buttons[.move_up].endedDown    do playerDY = -100.0
+      if controller.buttons[.move_down].endedDown  do playerDY = 100.0
+      if controller.buttons[.move_left].endedDown  do playerDX = -100.0
+      if controller.buttons[.move_right].endedDown do playerDX = 100.0
+
+      gameState.player[.x] += playerDX * gameControls.dtPerFrame
+      gameState.player[.y] += playerDY * gameControls.dtPerFrame
+
+    }
   }
 
 
@@ -67,15 +76,15 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
                 0, 0, f32(colorBuffer.width), f32(colorBuffer.height))
 
   tileMap := [][]f32{
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1 },
-    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 },
-    {1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1 },
-    {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0.5, 0, 0, 1 },
-    {1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1 },
-    {1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+    {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0 },
+    {1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0 },
+    {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
   }
 
   tileWidth := f32(colorBuffer.width / i32(len(tileMap[0])))
@@ -88,6 +97,15 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
                     f32(x+1) * tileWidth, f32(y+1) * tileHeight)
     }
   }
+
+  playerR, playerG, playerB : f32 = 0.0, 1.0, 0.0
+  playerWidth  := 0.75 * tileWidth
+  playerHeight := tileHeight
+  playerLeft   := gameState.player[.x] - (0.5 * playerWidth)
+  playerTop    := gameState.player[.y] - playerHeight
+  drawRectangle(colorBuffer, playerR, playerG, playerB,
+                playerLeft, playerTop, 
+                playerLeft + playerWidth, playerTop + playerHeight)
 
 }
 

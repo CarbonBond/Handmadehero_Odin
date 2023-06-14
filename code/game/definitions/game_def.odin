@@ -50,11 +50,12 @@ memory :: struct {
 }
 
 state :: struct {
+  player : [position]f32
 }
 
 input :: struct {
-  controllers                : [5]controller_input
-  secondsToAdvanceOverUpdate : f32
+  controllers : [5]controller_input
+  dtPerFrame  : f32
 }
 
 position :: enum {

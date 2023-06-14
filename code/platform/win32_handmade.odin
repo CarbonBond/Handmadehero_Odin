@@ -247,17 +247,19 @@ main :: proc() {
       newInput := &inputs[0]
       oldInput := &inputs[1]
 
-      newInput.secondsToAdvanceOverUpdate = targetSecondsPerFrame;
 
       gameCode := wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
 
       globalState.running = true 
       for globalState.running {
         lastWriteTime, er := OS.last_write_time_by_name(dllFileFullPath)
+
         if gameCode.lastWriteTime != lastWriteTime {
           wUnloadGameCode(&gameCode)
           gameCode = wLoadGameCode(dllFileFullPath, dllTempFileFullPath)
         }
+
+        newInput.dtPerFrame = targetSecondsPerFrame;
 
         oldKeyboardController : ^game.controller_input = &oldInput.controllers[0]
         newKeyboardController : ^game.controller_input = &newInput.controllers[0]

@@ -7,5 +7,5 @@
 *.exp
 *.lib
 *.igmr
-./code/build/
 *.rdbg
+./code/build/*
