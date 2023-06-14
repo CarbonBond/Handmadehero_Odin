@@ -61,14 +61,33 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
   }
 
+
   //clear
-  drawRectangle(colorBuffer, 0x00FFFFFF,
+  drawRectangle(colorBuffer, 1.0, 0.0, 1.0,
                 0, 0, f32(colorBuffer.width), f32(colorBuffer.height))
-  drawRectangle(colorBuffer, 0x00FF00FF, -10, -10,
-                100, 100)
-  drawRectangle(colorBuffer, 0x00FF00FF,
-                f32(colorBuffer.width)-100, f32(colorBuffer.height)-100, 
-                f32(colorBuffer.width)+100, f32(colorBuffer.height)+100)
+
+  tileMap := [][]f32{
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+    {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1 },
+    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 },
+    {1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1 },
+    {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0.5, 0, 0, 1 },
+    {1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1 },
+    {1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+  }
+
+  tileWidth := f32(colorBuffer.width / i32(len(tileMap[0])))
+  tileHeight := f32(colorBuffer.height / i32(len(tileMap)))
+
+  for row, y in tileMap {
+    for cell, x in row {
+      drawRectangle(colorBuffer, cell, cell, cell,
+                    f32(x) * tileWidth,   f32(y) * tileHeight, 
+                    f32(x+1) * tileWidth, f32(y+1) * tileHeight)
+    }
+  }
 
 }
 
@@ -98,24 +117,35 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
   }
 }
 
-roundF32ToInt32 :: proc(num : f32) -> i32 {
+@private
+roundF32ToI32 :: proc(num : f32) -> i32 {
   return i32(num + 0.5)
+}
+@private
+roundF32ToU32 :: proc(num : f32) -> u32 {
+  return u32(num + 0.5)
 }
 
 @private
-drawRectangle :: proc (buffer: ^game.offscreen_buffer, color: u32,
+drawRectangle :: proc (buffer: ^game.offscreen_buffer,
+                       r, g, b: f32,
                        xMin_f, yMin_f, xMax_f, yMax_f: f32) {
 
-  xMin := roundF32ToInt32(xMin_f)
-  yMin := roundF32ToInt32(yMin_f)
-  xMax := roundF32ToInt32(xMax_f)
-  yMax := roundF32ToInt32(yMax_f)
+  xMin := roundF32ToI32(xMin_f)
+  yMin := roundF32ToI32(yMin_f)
+  xMax := roundF32ToI32(xMax_f)
+  yMax := roundF32ToI32(yMax_f)
 
   if xMin < 0 do xMin = 0
   if yMin < 0 do yMin = 0
-
   if xMax > buffer.width  do xMax = buffer.width
   if yMax > buffer.height do yMax = buffer.height
+
+  color : u32 = roundF32ToU32(0 * 255) << 24 |
+                roundF32ToU32(r * 255) << 16 |
+                roundF32ToU32(g * 255) << 8  |
+                roundF32ToU32(b * 255) << 0 
+ 
 
   bufferMemoryArray := buffer.memory[:]
 
