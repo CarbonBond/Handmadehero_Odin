@@ -720,13 +720,20 @@ wDisplayBufferInWindow :: proc "std" (deviceContext: WIN32.HDC,
                                      bitmap: ^w_offscreen_buffer) {
 
 
+  /* TODO(Carbon): THis causes flashing?
+  WIN32.PatBlt( deviceContext, 0, 0, 
+                windowWidth, windowHeight, WIN32.BLACKNESS )
+                */
+
+  offsetY : i32 = 0
+  offsetX : i32 = 0
   //TODO(Carbon) Aspect ration correction.
   //TODO(Carbon) Play with stretch modes.
   WIN32.StretchDIBits(
     deviceContext,
     //0, 0, windowWidth, windowHeight, 
     //NOTE(Carbon) Doing direct mapping for 1 to 1 pixels while coding renderer
-    0, 0, bitmap.width, bitmap.height,
+    offsetX, offsetY, bitmap.width, bitmap.height,
     0, 0, bitmap.width, bitmap.height,
     bitmap.memory,
     &bitmap.info,

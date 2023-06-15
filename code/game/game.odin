@@ -43,58 +43,83 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
   gameState := cast(^game.state)(gameMemory.permanentStorage)
 
-  if !gameMemory.isInitialized {
-    gameMemory.isInitialized = true
+  tileMap := [][]i32{
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    {1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
   }
 
+  upperLeftX : f32 = 0.0
+  upperLeftY : f32 = 0.0
+  tileWidth := f32(colorBuffer.width / i32(len(tileMap[0])))
+  tileHeight := f32(colorBuffer.height / i32(len(tileMap)))
+
+
+  if !gameMemory.isInitialized {
+    gameMemory.isInitialized = true
+    gameState.player[.x] = 400
+    gameState.player[.y] = 400
+  }
 
   for controller in gameControls.controllers {
-
 
     if !controller.isConnected do continue
 
     if(controller.isAnalog) {
-
+      if controller.buttons[.action_down].endedDown {
+        gameState.player[.x] = 400
+        gameState.player[.y] = 400
+      }
     } else {
 
       playerDX, playerDY : f32 = 0.0, 0.0
 
-      if controller.buttons[.move_up].endedDown    do playerDY = -100.0
-      if controller.buttons[.move_down].endedDown  do playerDY = 100.0
-      if controller.buttons[.move_left].endedDown  do playerDX = -100.0
-      if controller.buttons[.move_right].endedDown do playerDX = 100.0
+      if controller.buttons[.move_up].endedDown    do playerDY = -200.0
+      if controller.buttons[.move_down].endedDown  do playerDY = 200.0
+      if controller.buttons[.move_left].endedDown  do playerDX = -200.0
+      if controller.buttons[.move_right].endedDown do playerDX = 200.0
 
-      gameState.player[.x] += playerDX * gameControls.dtPerFrame
-      gameState.player[.y] += playerDY * gameControls.dtPerFrame
+      playerXNew := gameState.player[.x] + (playerDX * gameControls.dtPerFrame)
+      playerYNew := gameState.player[.y] + (playerDY * gameControls.dtPerFrame)
+
+      playerTileX := truncF32toI32((gameState.player[.x] - upperLeftX) / tileWidth);
+      playerTileY := truncF32toI32((gameState.player[.y] - upperLeftY) / tileHeight);
+
+      isMoveValid := false
+      if ( playerTileX >= 0 && playerTileX < i32(len(tileMap[0])) &&
+           playerTileY >= 0 && playerTileY < i32(len(tileMap))
+         ) {
+           tileMapValue := tileMap[playerTileY][playerTileX]
+           isMoveValid = !bool(tileMapValue)
+         }
+
+      if isMoveValid {
+        gameState.player[.x] = playerXNew
+        gameState.player[.y] = playerYNew
+      }
 
     }
   }
 
 
-  //clear
+  //clear screen
   drawRectangle(colorBuffer, 1.0, 0.0, 1.0,
                 0, 0, f32(colorBuffer.width), f32(colorBuffer.height))
 
-  tileMap := [][]f32{
-    {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0 },
-    {1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0 },
-    {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-  }
-
-  tileWidth := f32(colorBuffer.width / i32(len(tileMap[0])))
-  tileHeight := f32(colorBuffer.height / i32(len(tileMap)))
 
   for row, y in tileMap {
     for cell, x in row {
-      drawRectangle(colorBuffer, cell, cell, cell,
-                    f32(x) * tileWidth,   f32(y) * tileHeight, 
-                    f32(x+1) * tileWidth, f32(y+1) * tileHeight)
+      distanceX := (f32(x) * tileWidth) + upperLeftX
+      distanceY := (f32(y) * tileWidth) + upperLeftY
+      drawRectangle(colorBuffer, f32(cell), f32(cell), f32(cell),
+                    distanceX,   distanceY, 
+                    distanceX + tileWidth, distanceY + tileHeight)
     }
   }
 
@@ -136,11 +161,15 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
 }
 
 @private
-roundF32ToI32 :: proc(num : f32) -> i32 {
+roundF32toI32 :: proc(num : f32) -> i32 {
   return i32(num + 0.5)
 }
 @private
-roundF32ToU32 :: proc(num : f32) -> u32 {
+truncF32toI32:: proc(num : f32) -> i32 {
+  return i32(num)
+}
+@private
+roundF32toU32 :: proc(num : f32) -> u32 {
   return u32(num + 0.5)
 }
 
@@ -149,20 +178,20 @@ drawRectangle :: proc (buffer: ^game.offscreen_buffer,
                        r, g, b: f32,
                        xMin_f, yMin_f, xMax_f, yMax_f: f32) {
 
-  xMin := roundF32ToI32(xMin_f)
-  yMin := roundF32ToI32(yMin_f)
-  xMax := roundF32ToI32(xMax_f)
-  yMax := roundF32ToI32(yMax_f)
+  xMin := roundF32toI32(xMin_f)
+  yMin := roundF32toI32(yMin_f)
+  xMax := roundF32toI32(xMax_f)
+  yMax := roundF32toI32(yMax_f)
 
   if xMin < 0 do xMin = 0
   if yMin < 0 do yMin = 0
   if xMax > buffer.width  do xMax = buffer.width
   if yMax > buffer.height do yMax = buffer.height
 
-  color : u32 = roundF32ToU32(0 * 255) << 24 |
-                roundF32ToU32(r * 255) << 16 |
-                roundF32ToU32(g * 255) << 8  |
-                roundF32ToU32(b * 255) << 0 
+  color : u32 = roundF32toU32(0 * 255) << 24 |
+                roundF32toU32(r * 255) << 16 |
+                roundF32toU32(g * 255) << 8  |
+                roundF32toU32(b * 255) << 0 
  
 
   bufferMemoryArray := buffer.memory[:]
