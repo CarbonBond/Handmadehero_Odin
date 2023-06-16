@@ -88,18 +88,10 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
       playerXNew := gameState.player[.x] + (playerDX * gameControls.dtPerFrame)
       playerYNew := gameState.player[.y] + (playerDY * gameControls.dtPerFrame)
 
-      playerTileX := truncF32toI32((gameState.player[.x] - upperLeftX) / tileWidth);
-      playerTileY := truncF32toI32((gameState.player[.y] - upperLeftY) / tileHeight);
-
-      isMoveValid := false
-      if ( playerTileX >= 0 && playerTileX < i32(len(tileMap[0])) &&
-           playerTileY >= 0 && playerTileY < i32(len(tileMap))
-         ) {
-           tileMapValue := tileMap[playerTileY][playerTileX]
-           isMoveValid = !bool(tileMapValue)
-         }
-
-      if isMoveValid {
+      if isTileMapPointEmpty(gameState.player[.x] - upperLeftX,
+                             gameState.player[.y] - upperLeftY,
+                             tileWidth, tileHeight, tileMap) {
+        
         gameState.player[.x] = playerXNew
         gameState.player[.y] = playerYNew
       }
@@ -160,6 +152,19 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
   }
 }
 
+@private
+isTileMapPointEmpty :: proc(x, y: f32, tileWidth, tileHeight: f32, tileMap: [][]i32) -> (result: bool) {
+  tileX := truncF32toI32(x / tileWidth);
+  tileY := truncF32toI32(y / tileHeight);
+
+  if ( tileX >= 0 && tileX < i32(len(tileMap[0])) &&
+       tileY >= 0 && tileY < i32(len(tileMap))) 
+  {
+    tileMapValue := tileMap[tileY][tileX]
+    result = !bool(tileMapValue)
+  }
+  return
+}
 @private
 roundF32toI32 :: proc(num : f32) -> i32 {
   return i32(num + 0.5)
