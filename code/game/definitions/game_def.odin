@@ -119,6 +119,15 @@ sound_output_buffer :: struct {
   sampleCount: int
 }
 
+tile_map :: struct {
+  tiles      : [][]i32
+  upperLeftX : f32 
+  upperLeftY : f32
+  width  : f32
+  height : f32
+  
+}
+
 empty_UpdateAndRender :: proc(thread: ^thread_context, gameMemory: ^memory, 
                               colorBuffer : ^offscreen_buffer, 
                               gameControls: ^input) { return } 
