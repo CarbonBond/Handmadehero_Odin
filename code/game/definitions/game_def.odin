@@ -120,11 +120,16 @@ sound_output_buffer :: struct {
 }
 
 tile_map :: struct {
-  tiles      : [][]i32
+  tiles      : [^]i32
+
+  xCount     : i32
+  yCount     : i32
+
   upperLeftX : f32 
   upperLeftY : f32
-  width  : f32
-  height : f32
+
+  tileWidth  : f32
+  tileHeight : f32
   
 }
 

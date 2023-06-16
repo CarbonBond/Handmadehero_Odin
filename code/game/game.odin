@@ -43,24 +43,35 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
   gameState := cast(^game.state)(gameMemory.permanentStorage)
 
+
   tileMap : tile_map
-  tileMap.tiles = [][]i32{
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    {1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+  tileMap.xCount = 16
+  tileMap.yCount = 9
+
+  tiles := []i32{
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
   }
+
+  tileMap.tiles = cast([^]i32)&tiles[0]
 
   tileMap.upperLeftX = 0.0
   tileMap.upperLeftY = 0.0
-  tileMap.width = f32(colorBuffer.width / i32(len(tileMap.tiles[0])))
-  tileMap.height = f32(colorBuffer.height / i32(len(tileMap.tiles)))
+  tileMap.tileWidth = f32(colorBuffer.width / i32(tileMap.xCount))
+  tileMap.tileHeight = f32(colorBuffer.height / i32(tileMap.yCount))
 
+  playerR, playerG, playerB : f32 = 0.0, 1.0, 0.0
+  playerWidth  := 0.75 * tileMap.tileWidth
+  playerHeight := tileMap.tileHeight
+  playerLeft   := gameState.player[.x] - (0.5 * playerWidth)
+  playerTop    := gameState.player[.y] - playerHeight
 
   if !gameMemory.isInitialized {
     gameMemory.isInitialized = true
@@ -89,7 +100,10 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
       playerXNew := gameState.player[.x] + (playerDX * gameControls.dtPerFrame)
       playerYNew := gameState.player[.y] + (playerDY * gameControls.dtPerFrame)
 
-      if isTileMapPointEmpty(tileMap, playerXNew, playerYNew) {
+      if (isTileMapPointEmpty(tileMap, playerXNew - (0.5 * playerWidth), playerYNew) &&
+          isTileMapPointEmpty(tileMap, playerXNew - (0.5 * playerWidth), playerYNew - (0.2 * playerHeight)) &&
+          isTileMapPointEmpty(tileMap, playerXNew + (0.5 * playerWidth), playerYNew - (0.2 * playerHeight)) &&
+          isTileMapPointEmpty(tileMap, playerXNew + (0.5 * playerWidth), playerYNew)) {
         
         gameState.player[.x] = playerXNew
         gameState.player[.y] = playerYNew
@@ -104,21 +118,18 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
                 0, 0, f32(colorBuffer.width), f32(colorBuffer.height))
 
 
-  for row, y in tileMap.tiles {
-    for cell, x in row {
-      distanceX := (f32(x) * tileMap.width) + tileMap.upperLeftX
-      distanceY := (f32(y) * tileMap.width) + tileMap.upperLeftY
-      drawRectangle(colorBuffer, f32(cell), f32(cell), f32(cell),
+  for y : i32 = 0; y < tileMap.yCount; y += 1 { 
+    for x : i32 = 0; x < tileMap.xCount; x += 1 {
+      tile := tileMap.tiles[y * tileMap.xCount + x]
+      distanceX := (f32(x) * tileMap.tileWidth) + tileMap.upperLeftX 
+      distanceY := (f32(y) * tileMap.tileHeight) + tileMap.upperLeftY 
+      drawRectangle(colorBuffer, f32(tile), f32(tile), f32(tile),
                     distanceX,   distanceY, 
-                    distanceX + tileMap.width, distanceY + tileMap.height)
+                    distanceX + tileMap.tileWidth, distanceY + tileMap.tileHeight)
     }
   }
 
-  playerR, playerG, playerB : f32 = 0.0, 1.0, 0.0
-  playerWidth  := 0.75 * tileMap.width
-  playerHeight := tileMap.height
-  playerLeft   := gameState.player[.x] - (0.5 * playerWidth)
-  playerTop    := gameState.player[.y] - playerHeight
+  //draw player
   drawRectangle(colorBuffer, playerR, playerG, playerB,
                 playerLeft, playerTop, 
                 playerLeft + playerWidth, playerTop + playerHeight)
@@ -153,13 +164,13 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
 
 @private
 isTileMapPointEmpty :: proc(tileMap: game.tile_map, x, y: f32) -> (result: bool) {
-  tileX := truncF32toI32((x - tileMap.upperLeftX) / tileMap.width);
-  tileY := truncF32toI32((y - tileMap.upperLeftY) / tileMap.height);
+  tileX := truncF32toI32((x - tileMap.upperLeftX) / tileMap.tileWidth);
+  tileY := truncF32toI32((y - tileMap.upperLeftY) / tileMap.tileHeight);
 
-  if ( tileX >= 0 && tileX < i32(len(tileMap.tiles[0])) &&
-       tileY >= 0 && tileY < i32(len(tileMap.tiles))) 
+  if ( tileX >= 0 && tileX < i32(tileMap.xCount) &&
+       tileY >= 0 && tileY < i32(tileMap.yCount)) 
   {
-    tileMapValue := tileMap.tiles[tileY][tileX]
+    tileMapValue := tileMap.tiles[tileY * i32(tileMap.xCount) + tileX]
     result = !bool(tileMapValue)
   }
   return
