@@ -44,28 +44,74 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
   gameState := cast(^game.state)(gameMemory.permanentStorage)
 
 
-  tileMap : tile_map
-  tileMap.xCount = 16
-  tileMap.yCount = 9
-
-  tiles := []i32{
+  tiles00 := []u32{
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
-    1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
-    1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
-    1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
-    1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1 ,
+  }
+  tiles01 := []u32{
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
-    1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 ,
+    0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1 ,
+  }
+  tiles10 := []u32{
+    1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
+  }
+  tiles11 := []u32{
+    1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1 ,
+    0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1 ,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,
   }
 
-  tileMap.tiles = cast([^]i32)&tiles[0]
 
-  tileMap.upperLeftX = 0.0
-  tileMap.upperLeftY = 0.0
-  tileMap.tileWidth = f32(colorBuffer.width / i32(tileMap.xCount))
-  tileMap.tileHeight = f32(colorBuffer.height / i32(tileMap.yCount))
+  tileMaps : [2][2]tile_map
+  tileMaps[0][0].xCount = 16
+  tileMaps[0][0].yCount = 9
+  tileMaps[0][0].tiles = cast([^]u32)&tiles00[0]
+  tileMaps[0][0].upperLeftX = 0.0
+  tileMaps[0][0].upperLeftY = 0.0
+  tileMaps[0][0].tileWidth = f32(colorBuffer.width / i32(tileMaps[0][0].xCount))
+  tileMaps[0][0].tileHeight = f32(colorBuffer.height / i32(tileMaps[0][0].yCount))
+
+  tileMaps[0][1] = tileMaps[0][0]
+  tileMaps[0][1].tiles = cast([^]u32)&tiles01[0]
+
+  tileMaps[1][0] = tileMaps[0][0]
+  tileMaps[1][0].tiles = cast([^]u32)&tiles10[0]
+
+  tileMaps[1][1] = tileMaps[0][0]
+  tileMaps[1][1].tiles = cast([^]u32)&tiles11[0]
+
+  tileMap := &tileMaps[0][0]
+  world : world_map
+  world.tileMaps = cast([^]tile_map)&tileMaps[0][0]
+  
 
   playerR, playerG, playerB : f32 = 0.0, 1.0, 0.0
   playerWidth  := 0.75 * tileMap.tileWidth
@@ -75,8 +121,8 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
   if !gameMemory.isInitialized {
     gameMemory.isInitialized = true
-    gameState.player[.x] = 400
-    gameState.player[.y] = 400
+    gameState.player[.x] = 100
+    gameState.player[.y] = 300
   }
 
   for controller in gameControls.controllers {
@@ -85,8 +131,8 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
     if(controller.isAnalog) {
       if controller.buttons[.action_down].endedDown {
-        gameState.player[.x] = 400
-        gameState.player[.y] = 400
+        gameState.player[.x] = 100
+        gameState.player[.y] = 300
       }
     } else {
 
@@ -120,7 +166,7 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
   for y : i32 = 0; y < tileMap.yCount; y += 1 { 
     for x : i32 = 0; x < tileMap.xCount; x += 1 {
-      tile := tileMap.tiles[y * tileMap.xCount + x]
+      tile := getTileValueUnchecked(tileMap, x, y)
       distanceX := (f32(x) * tileMap.tileWidth) + tileMap.upperLeftX 
       distanceY := (f32(y) * tileMap.tileHeight) + tileMap.upperLeftY 
       drawRectangle(colorBuffer, f32(tile), f32(tile), f32(tile),
@@ -163,18 +209,53 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
 }
 
 @private
-isTileMapPointEmpty :: proc(tileMap: game.tile_map, x, y: f32) -> (result: bool) {
+getTileValueUnchecked :: proc(tileMap : ^game.tile_map, xTile, yTile: i32) -> u32 {
+  return tileMap.tiles[yTile * tileMap.xCount + xTile]
+}
+
+@private
+isTileMapPointEmpty :: proc(tileMap: ^game.tile_map, x, y: f32) -> (result: bool) {
   tileX := truncF32toI32((x - tileMap.upperLeftX) / tileMap.tileWidth);
   tileY := truncF32toI32((y - tileMap.upperLeftY) / tileMap.tileHeight);
 
   if ( tileX >= 0 && tileX < i32(tileMap.xCount) &&
        tileY >= 0 && tileY < i32(tileMap.yCount)) 
   {
-    tileMapValue := tileMap.tiles[tileY * i32(tileMap.xCount) + tileX]
+    tileMapValue := getTileValueUnchecked(tileMap, tileX, tileY)
     result = !bool(tileMapValue)
   }
   return
 }
+
+@private
+getTileMap :: proc(worldMap: ^game.world_map, tileMapX, tileMapY: i32) -> (result: ^game.tile_map) {
+  if ( tileMapX > 0 && tileMapX < worldMap.tileMapCountX && 
+       tileMapY > 0 && tileMapY < worldMap.tileMapCountY) 
+    {
+      result = &worldMap.tileMaps[tileMapY * worldMap.tileMapCountX + tileMapY]
+    }
+  return 
+}
+
+@private
+isWorldPointEmpty :: proc(worldMap: ^game.world_map, tileMapX, tileMapY: i32,
+                          testX, testY: f32 ) -> (result: bool) {
+
+  tileMap := getTileMap(worldMap, tileMapX, tileMapY)
+  if (tileMap != nil) {
+    tileX := truncF32toI32((testX - tileMap.upperLeftX) / tileMap.tileWidth);
+    tileY := truncF32toI32((testY - tileMap.upperLeftY) / tileMap.tileHeight);
+
+    if ( tileX >= 0 && tileX < i32(tileMap.xCount) &&
+         tileY >= 0 && tileY < i32(tileMap.yCount)) 
+    {
+      tileMapValue := getTileValueUnchecked(tileMap, tileX, tileY)
+      result = !bool(tileMapValue)
+    }
+  }
+  return
+}
+
 @private
 roundF32toI32 :: proc(num : f32) -> i32 {
   return i32(num + 0.5)

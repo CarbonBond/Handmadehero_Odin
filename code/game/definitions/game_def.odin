@@ -119,8 +119,15 @@ sound_output_buffer :: struct {
   sampleCount: int
 }
 
+world_map :: struct {
+  tileMapCountX : i32
+  tileMapCountY : i32
+
+  tileMaps : [^]tile_map
+}
+
 tile_map :: struct {
-  tiles      : [^]i32
+  tiles      : [^]u32
 
   xCount     : i32
   yCount     : i32
