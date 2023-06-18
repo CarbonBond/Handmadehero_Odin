@@ -50,7 +50,9 @@ memory :: struct {
 }
 
 state :: struct {
-  player : [position]f32
+  player     : [position]f32
+  playerTile : [position]i32
+
 }
 
 input :: struct {
@@ -120,8 +122,18 @@ sound_output_buffer :: struct {
 }
 
 world_map :: struct {
+
   tileMapCountX : i32
   tileMapCountY : i32
+
+  tileCountX    : i32
+  tileCountY    : i32
+
+  upperLeftX : f32 
+  upperLeftY : f32
+
+  tileWidth  : f32
+  tileHeight : f32
 
   tileMaps : [^]tile_map
 }
@@ -129,15 +141,6 @@ world_map :: struct {
 tile_map :: struct {
   tiles      : [^]u32
 
-  xCount     : i32
-  yCount     : i32
-
-  upperLeftX : f32 
-  upperLeftY : f32
-
-  tileWidth  : f32
-  tileHeight : f32
-  
 }
 
 empty_UpdateAndRender :: proc(thread: ^thread_context, gameMemory: ^memory, 

@@ -91,39 +91,40 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
 
 
   tileMaps : [2][2]tile_map
-  tileMaps[0][0].xCount = 16
-  tileMaps[0][0].yCount = 9
+
   tileMaps[0][0].tiles = cast([^]u32)&tiles00[0]
-  tileMaps[0][0].upperLeftX = 0.0
-  tileMaps[0][0].upperLeftY = 0.0
-  tileMaps[0][0].tileWidth = f32(colorBuffer.width / i32(tileMaps[0][0].xCount))
-  tileMaps[0][0].tileHeight = f32(colorBuffer.height / i32(tileMaps[0][0].yCount))
+  tileMaps[1][0].tiles = cast([^]u32)&tiles01[0]
 
-  tileMaps[0][1] = tileMaps[0][0]
-  tileMaps[0][1].tiles = cast([^]u32)&tiles01[0]
+  tileMaps[0][1].tiles = cast([^]u32)&tiles10[0]
 
-  tileMaps[1][0] = tileMaps[0][0]
-  tileMaps[1][0].tiles = cast([^]u32)&tiles10[0]
-
-  tileMaps[1][1] = tileMaps[0][0]
   tileMaps[1][1].tiles = cast([^]u32)&tiles11[0]
 
-  tileMap := &tileMaps[0][0]
   world : world_map
+  world.tileMapCountX = 2
+  world.tileMapCountY = 2
   world.tileMaps = cast([^]tile_map)&tileMaps[0][0]
-  
+  world.tileCountX = 16
+  world.tileCountY = 9
+  world.upperLeftX = 0.0
+  world.upperLeftY = 0.0
+  world.tileWidth = f32(colorBuffer.width / world.tileCountX)
+  world.tileHeight = f32(colorBuffer.height / world.tileCountY)
 
-  playerR, playerG, playerB : f32 = 0.0, 1.0, 0.0
-  playerWidth  := 0.75 * tileMap.tileWidth
-  playerHeight := tileMap.tileHeight
-  playerLeft   := gameState.player[.x] - (0.5 * playerWidth)
-  playerTop    := gameState.player[.y] - playerHeight
+
 
   if !gameMemory.isInitialized {
     gameMemory.isInitialized = true
     gameState.player[.x] = 100
     gameState.player[.y] = 300
   }
+
+  tileMap := getTileMap(&world, gameState.playerTile[.x], gameState.playerTile[.y])
+  
+  playerR, playerG, playerB : f32 = 0.0, 1.0, 0.0
+  playerWidth  := 0.75 * world.tileWidth
+  playerHeight := world.tileHeight
+  playerLeft   := gameState.player[.x] - (0.5 * playerWidth)
+  playerTop    := gameState.player[.y] - playerHeight
 
   for controller in gameControls.controllers {
 
@@ -146,10 +147,14 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
       playerXNew := gameState.player[.x] + (playerDX * gameControls.dtPerFrame)
       playerYNew := gameState.player[.y] + (playerDY * gameControls.dtPerFrame)
 
-      if (isTileMapPointEmpty(tileMap, playerXNew - (0.5 * playerWidth), playerYNew) &&
-          isTileMapPointEmpty(tileMap, playerXNew - (0.5 * playerWidth), playerYNew - (0.2 * playerHeight)) &&
-          isTileMapPointEmpty(tileMap, playerXNew + (0.5 * playerWidth), playerYNew - (0.2 * playerHeight)) &&
-          isTileMapPointEmpty(tileMap, playerXNew + (0.5 * playerWidth), playerYNew)) {
+      if (isWorldPointEmpty(&world, playerXNew - (0.5 * playerWidth), playerYNew,
+                                       gameState.playerTile[.x], gameState.playerTile[.y] ) &&
+          isWorldPointEmpty(&world, playerXNew - (0.5 * playerWidth), playerYNew - (0.2 * playerHeight),
+                                       gameState.playerTile[.x], gameState.playerTile[.y] ) &&
+          isWorldPointEmpty(&world, playerXNew + (0.5 * playerWidth), playerYNew - (0.2 * playerHeight),
+                                       gameState.playerTile[.x], gameState.playerTile[.y] ) &&
+          isWorldPointEmpty(&world, playerXNew + (0.5 * playerWidth), playerYNew,
+                                       gameState.playerTile[.x], gameState.playerTile[.y] )){ 
         
         gameState.player[.x] = playerXNew
         gameState.player[.y] = playerYNew
@@ -164,14 +169,14 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
                 0, 0, f32(colorBuffer.width), f32(colorBuffer.height))
 
 
-  for y : i32 = 0; y < tileMap.yCount; y += 1 { 
-    for x : i32 = 0; x < tileMap.xCount; x += 1 {
-      tile := getTileValueUnchecked(tileMap, x, y)
-      distanceX := (f32(x) * tileMap.tileWidth) + tileMap.upperLeftX 
-      distanceY := (f32(y) * tileMap.tileHeight) + tileMap.upperLeftY 
+  for y : i32 = 0; y < world.tileCountY; y += 1 { 
+    for x : i32 = 0; x < world.tileCountX; x += 1 {
+      tile := getTileValueUnchecked(tileMap, &world, x, y)
+      distanceX := (f32(x) * world.tileWidth) + world.upperLeftX 
+      distanceY := (f32(y) * world.tileHeight) + world.upperLeftY 
       drawRectangle(colorBuffer, f32(tile), f32(tile), f32(tile),
                     distanceX,   distanceY, 
-                    distanceX + tileMap.tileWidth, distanceY + tileMap.tileHeight)
+                    distanceX + world.tileWidth, distanceY + world.tileHeight)
     }
   }
 
@@ -209,50 +214,66 @@ gameOutputSound :: proc(soundBuffer: ^game.sound_output_buffer,
 }
 
 @private
-getTileValueUnchecked :: proc(tileMap : ^game.tile_map, xTile, yTile: i32) -> u32 {
-  return tileMap.tiles[yTile * tileMap.xCount + xTile]
+getTileValueUnchecked :: proc(tileMap : ^game.tile_map, 
+                              world : ^game.world_map, xTile, yTile: i32) -> u32 {
+  return tileMap.tiles[yTile * world.tileCountX + xTile]
 }
 
 @private
-isTileMapPointEmpty :: proc(tileMap: ^game.tile_map, x, y: f32) -> (result: bool) {
-  tileX := truncF32toI32((x - tileMap.upperLeftX) / tileMap.tileWidth);
-  tileY := truncF32toI32((y - tileMap.upperLeftY) / tileMap.tileHeight);
+isTileMapPointEmpty :: proc(tileMap: ^game.tile_map, 
+                            world : ^game.world_map, testX, testY: i32) -> (result: bool) {
+  if tileMap != nil {
 
-  if ( tileX >= 0 && tileX < i32(tileMap.xCount) &&
-       tileY >= 0 && tileY < i32(tileMap.yCount)) 
-  {
-    tileMapValue := getTileValueUnchecked(tileMap, tileX, tileY)
-    result = !bool(tileMapValue)
+    if ( testX >= 0 && testX < world.tileCountX &&
+         testY >= 0 && testY < world.tileCountY) 
+    {
+      tileMapValue := getTileValueUnchecked(tileMap, world, testX, testY)
+      result = !bool(tileMapValue)
+    }
   }
   return
 }
 
 @private
-getTileMap :: proc(worldMap: ^game.world_map, tileMapX, tileMapY: i32) -> (result: ^game.tile_map) {
-  if ( tileMapX > 0 && tileMapX < worldMap.tileMapCountX && 
-       tileMapY > 0 && tileMapY < worldMap.tileMapCountY) 
+getTileMap :: proc(world: ^game.world_map, tileMapX, tileMapY: i32) -> (result: ^game.tile_map) {
+  if ( tileMapX >= 0 && tileMapX < world.tileMapCountX && 
+       tileMapY >= 0 && tileMapY < world.tileMapCountY) 
     {
-      result = &worldMap.tileMaps[tileMapY * worldMap.tileMapCountX + tileMapY]
+      result = &world.tileMaps[tileMapY * world.tileMapCountX + tileMapY]
     }
   return 
 }
 
 @private
-isWorldPointEmpty :: proc(worldMap: ^game.world_map, tileMapX, tileMapY: i32,
-                          testX, testY: f32 ) -> (result: bool) {
+isWorldPointEmpty :: proc(world: ^game.world_map, testX, testY: f32, tileMapX, tileMapY: i32 ) -> (result: bool) {
 
-  tileMap := getTileMap(worldMap, tileMapX, tileMapY)
-  if (tileMap != nil) {
-    tileX := truncF32toI32((testX - tileMap.upperLeftX) / tileMap.tileWidth);
-    tileY := truncF32toI32((testY - tileMap.upperLeftY) / tileMap.tileHeight);
 
-    if ( tileX >= 0 && tileX < i32(tileMap.xCount) &&
-         tileY >= 0 && tileY < i32(tileMap.yCount)) 
-    {
-      tileMapValue := getTileValueUnchecked(tileMap, tileX, tileY)
-      result = !bool(tileMapValue)
-    }
+  testTileMapY := tileMapY
+  testTileMapX := tileMapX
+
+  testTileX := truncF32toI32((testX - world.upperLeftX) / world.tileWidth);
+  testTileY := truncF32toI32((testY - world.upperLeftY) / world.tileHeight);
+
+  if(testTileX < 0) {
+    testTileX = world.tileCountX + testTileX 
+    testTileMapX -= 1
   }
+  if(testTileX > world.tileCountX) {
+    testTileX = testTileX - world.tileCountX 
+    testTileMapX += 1
+  }
+  if(testTileY < 0) {
+    testTileY = world.tileCountY + testTileY 
+    testTileMapY -= 1
+  }
+  if(testTileY > world.tileCountY) {
+    testTileY = testTileY - world.tileCountY  
+    testTileMapY += 1
+  }
+
+  tileMap := getTileMap(world, testTileMapX, testTileMapY)
+  result = isTileMapPointEmpty(tileMap, world, testTileX, testTileY)
+
   return
 }
 
