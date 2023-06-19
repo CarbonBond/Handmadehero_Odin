@@ -258,7 +258,7 @@ isWorldPointEmpty :: proc(world: ^game.world_map, testX, testY: f32, tileMapX, t
     testTileX = world.tileCountX + testTileX 
     testTileMapX -= 1
   }
-  if(testTileX > world.tileCountX) {
+  if(testTileX >= world.tileCountX) {
     testTileX = testTileX - world.tileCountX 
     testTileMapX += 1
   }
@@ -266,7 +266,7 @@ isWorldPointEmpty :: proc(world: ^game.world_map, testX, testY: f32, tileMapX, t
     testTileY = world.tileCountY + testTileY 
     testTileMapY -= 1
   }
-  if(testTileY > world.tileCountY) {
+  if(testTileY >= world.tileCountY) {
     testTileY = testTileY - world.tileCountY  
     testTileMapY += 1
   }
