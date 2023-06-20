@@ -140,7 +140,6 @@ world_map :: struct {
 
 tile_map :: struct {
   tiles      : [^]u32
-
 }
 
 empty_UpdateAndRender :: proc(thread: ^thread_context, gameMemory: ^memory, 

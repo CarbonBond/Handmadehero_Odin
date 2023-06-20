@@ -93,9 +93,9 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
   tileMaps : [2][2]tile_map
 
   tileMaps[0][0].tiles = cast([^]u32)&tiles00[0]
-  tileMaps[1][0].tiles = cast([^]u32)&tiles01[0]
+  tileMaps[0][1].tiles = cast([^]u32)&tiles01[0]
 
-  tileMaps[0][1].tiles = cast([^]u32)&tiles10[0]
+  tileMaps[1][0].tiles = cast([^]u32)&tiles10[0]
 
   tileMaps[1][1].tiles = cast([^]u32)&tiles11[0]
 
@@ -239,7 +239,7 @@ getTileMap :: proc(world: ^game.world_map, tileMapX, tileMapY: i32) -> (result: 
   if ( tileMapX >= 0 && tileMapX < world.tileMapCountX && 
        tileMapY >= 0 && tileMapY < world.tileMapCountY) 
     {
-      result = &world.tileMaps[tileMapY * world.tileMapCountX + tileMapY]
+      result = &world.tileMaps[tileMapY * world.tileMapCountX + tileMapX]
     }
   return 
 }
