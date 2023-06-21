@@ -147,17 +147,23 @@ gameUpdateAndRender :: proc(thread: ^game.thread_context,
       playerXNew := gameState.player[.x] + (playerDX * gameControls.dtPerFrame)
       playerYNew := gameState.player[.y] + (playerDY * gameControls.dtPerFrame)
 
-      if (isWorldPointEmpty(&world, playerXNew - (0.5 * playerWidth), playerYNew,
-                                       gameState.playerTile[.x], gameState.playerTile[.y] ) &&
-          isWorldPointEmpty(&world, playerXNew - (0.5 * playerWidth), playerYNew - (0.2 * playerHeight),
-                                       gameState.playerTile[.x], gameState.playerTile[.y] ) &&
-          isWorldPointEmpty(&world, playerXNew + (0.5 * playerWidth), playerYNew - (0.2 * playerHeight),
-                                       gameState.playerTile[.x], gameState.playerTile[.y] ) &&
-          isWorldPointEmpty(&world, playerXNew + (0.5 * playerWidth), playerYNew,
-                                       gameState.playerTile[.x], gameState.playerTile[.y] )){ 
+      playerPos : raw_position = {
+        gameState.playerTile[.x], gameState.playerTile[.y], playerXNew, playerYNew
+      }
+      playerLeft := playerPos
+      playerLeft.pixelX -= 0.5 * playerWidth
+      playerRight := playerPos
+      playerRight.pixelX += 0.5 * playerWidth
+
+      if (isWorldPointEmpty(&world, playerPos) &&
+          isWorldPointEmpty(&world, playerLeft) &&
+          isWorldPointEmpty(&world, playerRight) ){ 
         
-        gameState.player[.x] = playerXNew
-        gameState.player[.y] = playerYNew
+        canPos := getCononicalPosition(&world, playerPos)
+        gameState.playerTile[.x] = canPos.tileMapX
+        gameState.playerTile[.y] = canPos.tileMapY
+        gameState.player[.x] = world.upperLeftX + (world.tileWidth  * f32(canPos.tileX)) + canPos.pixelX
+        gameState.player[.y] = world.upperLeftY + (world.tileHeight * f32(canPos.tileY)) + canPos.pixelY 
       }
 
     }
@@ -245,34 +251,46 @@ getTileMap :: proc(world: ^game.world_map, tileMapX, tileMapY: i32) -> (result: 
 }
 
 @private
-isWorldPointEmpty :: proc(world: ^game.world_map, testX, testY: f32, tileMapX, tileMapY: i32 ) -> (result: bool) {
+isWorldPointEmpty :: proc(world: ^game.world_map, rawPosition: game.raw_position) -> (result: bool) {
+
+  conPosition := getCononicalPosition(world, rawPosition)
+  tileMap := getTileMap(world, conPosition.tileMapX, conPosition.tileMapX)
+  result = isTileMapPointEmpty(tileMap, world, conPosition.tileX, conPosition.tileY )
+  return
+}
 
 
-  testTileMapY := tileMapY
-  testTileMapX := tileMapX
+@private
+getCononicalPosition :: proc(world: ^game.world_map, pos: game.raw_position) -> (newPos: game.cononical_position) {
 
-  testTileX := truncF32toI32((testX - world.upperLeftX) / world.tileWidth);
-  testTileY := truncF32toI32((testY - world.upperLeftY) / world.tileHeight);
+  newPos.tileMapY = pos.tileMapY
+  newPos.tileMapX = pos.tileMapX
 
-  if(testTileX < 0) {
-    testTileX = world.tileCountX + testTileX 
-    testTileMapX -= 1
+  x : f32 = (pos.pixelX - world.upperLeftX)
+  y : f32 = (pos.pixelY - world.upperLeftY) 
+  newPos.tileX = truncF32toI32( x / world.tileWidth);
+  newPos.tileY = truncF32toI32( y / world.tileHeight);
+  newPos.pixelX = x - (f32(newPos.tileX) * world.tileWidth);
+  newPos.pixelY = y - (f32(newPos.tileY) * world.tileHeight);
+
+  //TODO(Carbon) assert values are inside the correct ranges.
+
+  if(newPos.tileX < 0) {
+    newPos.tileX = world.tileCountX + newPos.tileX 
+    newPos.tileMapX -= 1
   }
-  if(testTileX >= world.tileCountX) {
-    testTileX = testTileX - world.tileCountX 
-    testTileMapX += 1
+  if(newPos.tileX >= world.tileCountX) {
+    newPos.tileX = newPos.tileX - world.tileCountX 
+    newPos.tileMapX += 1
   }
-  if(testTileY < 0) {
-    testTileY = world.tileCountY + testTileY 
-    testTileMapY -= 1
+  if(newPos.tileY < 0) {
+    newPos.tileY = world.tileCountY + newPos.tileY 
+    newPos.tileMapY -= 1
   }
-  if(testTileY >= world.tileCountY) {
-    testTileY = testTileY - world.tileCountY  
-    testTileMapY += 1
+  if(newPos.tileY >= world.tileCountY) {
+    newPos.tileY = newPos.tileY - world.tileCountY  
+    newPos.tileMapY += 1
   }
-
-  tileMap := getTileMap(world, testTileMapX, testTileMapY)
-  result = isTileMapPointEmpty(tileMap, world, testTileX, testTileY)
 
   return
 }

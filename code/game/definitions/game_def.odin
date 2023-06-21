@@ -138,6 +138,16 @@ world_map :: struct {
   tileMaps : [^]tile_map
 }
 
+cononical_position :: struct { 
+  tileMapX, tileMapY, tileX, tileY: i32,
+  pixelX, pixelY : f32
+}
+
+raw_position :: struct {
+  tileMapX, tileMapY : i32,
+  pixelX, pixelY : f32
+}
+
 tile_map :: struct {
   tiles      : [^]u32
 }
